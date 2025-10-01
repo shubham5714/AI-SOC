@@ -301,11 +301,33 @@ export const SelesCardDataOptions = ({ color, gradientSettings }: GradientChartT
     colors: [color]
 })
 
-
 const RevenueIcon = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="none" /><line x1="128" y1="72" x2="128" y2="88" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><line x1="128" y1="168" x2="128" y2="184" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><circle cx="128" cy="128" r="96" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M104,168h36a20,20,0,0,0,0-40H116a20,20,0,0,1,0-40h36" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /></svg>
 const CustomersIcon = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="none" /><circle cx="128" cy="144" r="40" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M72,216a65,65,0,0,1,112,0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M164,72.55a32,32,0,1,1,39.63,45.28c14.33,3.1,27.89,14.84,36.4,26.17" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M16,144c8.51-11.33,22.06-23.07,36.4-26.17A32,32,0,1,1,92,72.55" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /></svg>
 const TransactionsIcon = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="none" /><line x1="80" y1="100" x2="176" y2="100" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><line x1="80" y1="140" x2="176" y2="140" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M32,208V56a8,8,0,0,1,8-8H216a8,8,0,0,1,8,8V208l-32-16-32,16-32-16L96,208,64,192Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /></svg>
 const ProductsIcon = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="none" /><polyline points="32.7 76.92 128 129.08 223.3 76.92" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><line x1="128" y1="129.09" x2="128" y2="231.97" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><path d="M219.84,182.84l-88,48.18a8,8,0,0,1-7.68,0l-88-48.18a8,8,0,0,1-4.16-7V80.18a8,8,0,0,1,4.16-7l88-48.18a8,8,0,0,1,7.68,0l88,48.18a8,8,0,0,1,4.16,7v95.64A8,8,0,0,1,219.84,182.84Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /><polyline points="81.56 48.31 176 100 176 152" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="24" /></svg>
+const BellIcon = (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+      <rect width="256" height="256" fill="none" />
+      <path
+        d="M48 120c0-48 40-88 80-88s80 40 80 88v40l16 24H32l16-24Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="24"
+      />
+      <circle
+        cx="128"
+        cy="188"
+        r="12"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="24"
+      />
+    </svg>
+  );
 
 const ChartGradientSettings = {
     Revenue: {
@@ -407,10 +429,10 @@ export interface SelesCardDataType {
 }
 
 export const SelesCardData: SelesCardDataType[] = [
-    { id: 1, title: "$315,244", description: "Total Alerts", iconBg: "primary", percentage: "12%", trendIcon: "up", svgIcon: RevenueIcon, chartOptions: SelesCardDataOptions({ color: 'var(--primary-color)', gradientSettings: ChartGradientSettings.Revenue }), chartSeries: SelesCardDataSeries },
-    { id: 2, title: "153,432", description: "Total Customers", iconBg: "success", percentage: "5%", trendIcon: "down", svgIcon: CustomersIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(133, 204, 65)', gradientSettings: ChartGradientSettings.Customers }), chartSeries: SelesCardDataSeries },
-    { id: 3, title: "75,275", description: "Total Transactions", iconBg: "info", percentage: "11%", trendIcon: "up", svgIcon: TransactionsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(40, 200, 235)', gradientSettings: ChartGradientSettings.Transactions }), chartSeries: SelesCardDataSeries },
-    { id: 4, title: "6,26,532", description: "Total Products", iconBg: "secondary", percentage: "6.5%", trendIcon: "up", svgIcon: ProductsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(244, 110, 244)', gradientSettings: ChartGradientSettings.Products }), chartSeries: SelesCardDataSeries },
+    { id: 1, title: "", description: "Total Alerts", iconBg: "primary", percentage: "12%", trendIcon: "up", svgIcon: BellIcon, chartOptions: SelesCardDataOptions({ color: 'var(--primary-color)', gradientSettings: ChartGradientSettings.Revenue }), chartSeries: SelesCardDataSeries },
+    { id: 2, title: "1", description: "Open Alerts", iconBg: "success", percentage: "5%", trendIcon: "down", svgIcon: CustomersIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(133, 204, 65)', gradientSettings: ChartGradientSettings.Customers }), chartSeries: SelesCardDataSeries },
+    { id: 3, title: "7", description: "Closed Alerts", iconBg: "info", percentage: "11%", trendIcon: "up", svgIcon: TransactionsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(40, 200, 235)', gradientSettings: ChartGradientSettings.Transactions }), chartSeries: SelesCardDataSeries },
+    { id: 4, title: "12:03", description: "Mean time to Notify", iconBg: "secondary", percentage: "6.5%", trendIcon: "up", svgIcon: ProductsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(244, 110, 244)', gradientSettings: ChartGradientSettings.Products }), chartSeries: SelesCardDataSeries },
 ];
 
 // Orders Overview

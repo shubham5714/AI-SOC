@@ -265,7 +265,12 @@ const Header: React.FC<HeaderProps> = () => {
         const value = e.target.value;
         const next = value === 'all' ? 'all' : value;
         setSelectedTenantIds(next);
-        if (typeof window !== 'undefined') localStorage.setItem('selectedTenantIds', JSON.stringify(next));
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('selectedTenantIds', JSON.stringify(next));
+            try {
+                window.dispatchEvent(new CustomEvent('tenantSelectionChanged', { detail: next }));
+            } catch { }
+        }
     };
     const tenantOptions = useMemo(() => [{ id: 'all', name: 'All tenants' }, ...assignedTenants], [assignedTenants]);
 

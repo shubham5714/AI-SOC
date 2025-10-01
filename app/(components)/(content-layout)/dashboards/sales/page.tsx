@@ -9,13 +9,79 @@ import { CountrySales, notifications, OrdersOverview, OverviewProgress, RecentOr
 import Seo from "@/shared/layouts-components/seo/seo";
 import Image from "next/image";
 import Link from "next/link";
-import React, { Fragment, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bootstrap";
 import DatePicker from "react-datepicker";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { createClient } from "@supabase/supabase-js";
 
 interface SalesProps { }
 
-const Sales: React.FC<SalesProps> = () => {
+const SalesInner: React.FC = () => {
+    // Selected tenants from localStorage (updated when header switcher changes)
+    const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const readSelection = () => {
+            try {
+                const raw = localStorage.getItem('selectedTenantIds');
+                if (raw) setSelectedTenantIds(JSON.parse(raw));
+                else setSelectedTenantIds('all');
+            } catch {
+                setSelectedTenantIds('all');
+            }
+        };
+        readSelection();
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === 'selectedTenantIds') readSelection();
+        };
+        const onTenantEvent = () => readSelection();
+        window.addEventListener('storage', onStorage);
+        window.addEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
+        };
+    }, []);
+
+    // Supabase client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
+
+    // Fetch total alerts count from tickets respecting tenant selection
+    const { data: totalAlertsCount } = useQuery({
+        queryKey: ["total-alerts-count", selectedTenantIds],
+        queryFn: async () => {
+            // Resolve tenant filter: 'all' means use all assigned tenants
+            let tenantFilter: string[] | null = null;
+            if (typeof window !== 'undefined') {
+                try {
+                    const assignedRaw = localStorage.getItem('assignedTenants');
+                    const assigned = assignedRaw ? JSON.parse(assignedRaw) as { id: string; name: string }[] : [];
+                    if (selectedTenantIds === 'all') {
+                        tenantFilter = assigned.map(t => t.id);
+                    } else if (typeof selectedTenantIds === 'string') {
+                        tenantFilter = [selectedTenantIds];
+                    } else {
+                        tenantFilter = selectedTenantIds;
+                    }
+                } catch {
+                    tenantFilter = null;
+                }
+            }
+
+            let query = supabase.from('tickets').select('*', { count: 'exact', head: true });
+            if (tenantFilter && tenantFilter.length > 0) {
+                query = query.in('tenant_id', tenantFilter as string[]);
+            }
+            const { count, error } = await query;
+            if (error) throw error;
+            return count ?? 0;
+        },
+        staleTime: 30_000,
+        refetchOnWindowFocus: false
+    });
 
     // Tenant selection is now handled globally in header
 
@@ -97,6 +163,14 @@ const Sales: React.FC<SalesProps> = () => {
 
 
 
+    const cards = useMemo(() => {
+        const cloned = [...SelesCardData];
+        if (cloned.length > 0 && typeof totalAlertsCount === 'number') {
+            cloned[0] = { ...cloned[0], title: totalAlertsCount.toString() };
+        }
+        return cloned;
+    }, [totalAlertsCount]);
+
     return (
 
         <Fragment>
@@ -127,7 +201,7 @@ const Sales: React.FC<SalesProps> = () => {
                     <Row>
                         <Col xxl={5} >
                             <Row>
-                                {SelesCardData.map((idx) => (
+                                {cards.map((idx) => (
                                     <Col xl={6} key={idx.id}>
                                         <SpkSalesCard card={idx} />
                                     </Col>
@@ -466,6 +540,18 @@ const Sales: React.FC<SalesProps> = () => {
             {/*<!-- End:: row-1 -->*/}
         </Fragment>
     )
+};
+
+const Sales: React.FC<SalesProps> = () => {
+    const queryClientRef = useRef<QueryClient | null>(null);
+    if (!queryClientRef.current) {
+        queryClientRef.current = new QueryClient();
+    }
+    return (
+        <QueryClientProvider client={queryClientRef.current}>
+            <SalesInner />
+        </QueryClientProvider>
+    );
 };
 
 export default Sales;
