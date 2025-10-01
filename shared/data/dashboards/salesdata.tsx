@@ -407,7 +407,7 @@ export interface SelesCardDataType {
 }
 
 export const SelesCardData: SelesCardDataType[] = [
-    { id: 1, title: "$315,244", description: "Total Revenue", iconBg: "primary", percentage: "12%", trendIcon: "up", svgIcon: RevenueIcon, chartOptions: SelesCardDataOptions({ color: 'var(--primary-color)', gradientSettings: ChartGradientSettings.Revenue }), chartSeries: SelesCardDataSeries },
+    { id: 1, title: "$315,244", description: "Total Alerts", iconBg: "primary", percentage: "12%", trendIcon: "up", svgIcon: RevenueIcon, chartOptions: SelesCardDataOptions({ color: 'var(--primary-color)', gradientSettings: ChartGradientSettings.Revenue }), chartSeries: SelesCardDataSeries },
     { id: 2, title: "153,432", description: "Total Customers", iconBg: "success", percentage: "5%", trendIcon: "down", svgIcon: CustomersIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(133, 204, 65)', gradientSettings: ChartGradientSettings.Customers }), chartSeries: SelesCardDataSeries },
     { id: 3, title: "75,275", description: "Total Transactions", iconBg: "info", percentage: "11%", trendIcon: "up", svgIcon: TransactionsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(40, 200, 235)', gradientSettings: ChartGradientSettings.Transactions }), chartSeries: SelesCardDataSeries },
     { id: 4, title: "6,26,532", description: "Total Products", iconBg: "secondary", percentage: "6.5%", trendIcon: "up", svgIcon: ProductsIcon, chartOptions: SelesCardDataOptions({ color: 'rgb(244, 110, 244)', gradientSettings: ChartGradientSettings.Products }), chartSeries: SelesCardDataSeries },

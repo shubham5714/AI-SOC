@@ -1,15 +1,12 @@
 "use client"
-import React, { Fragment, useEffect, useRef, useState } from 'react'
+import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import Switcher from '../switcher/switcher';
 import { data$, getState, setState } from '../services/switcherServices';
-import { MENUITEMS, Menuitemtype } from '../sidebar/nav';
-import SpkListgroup from '@/shared/@spk-reusable-components/reusable-uiElements/spk-listgroup';
-import { Card, Dropdown, Form, ListGroup, Modal } from 'react-bootstrap';
-import SpkButton from '@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons';
+import { Dropdown, Form } from 'react-bootstrap';
 import SpkDropdown from '@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown';
 import SimpleBar from 'simplebar-react';
-import { cartProduct, Notifications } from '@/shared/data/headerdata';
+import { Notifications } from '@/shared/data/headerdata';
 import Image from 'next/image';
 import nextConfig from "@/next.config"
 import { ThemeChanger } from '@/shared/redux/actions';
@@ -248,122 +245,31 @@ const Header: React.FC<HeaderProps> = () => {
 
 
     //  switcher offcanvas
-
     const [show, setShow] = useState(false);
     const handleClose = () => setShow(false);
     const handleShow = () => setShow(true);
 
-    //Search Functionality
-
-    const searchRef = useRef<HTMLInputElement | null>(null);
-
-    const handleClick = (event: MouseEvent) => {
-        const searchInput = searchRef.current;
-
-        if (searchInput && (searchInput === event.target || searchInput.contains(event.target as Node))) {
-            document.querySelector(".header-search")?.classList.add("searchdrop");
-        } else {
-            document.querySelector(".header-search")?.classList.remove("searchdrop");
-        }
-    };
-
+    // Tenant Switcher (global)
+    const [assignedTenants, setAssignedTenants] = useState<{ id: string; name: string }[]>([]);
+    const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
     useEffect(() => {
-        document.body.addEventListener("click", handleClick);
-
-        return () => {
-            document.body.removeEventListener("click", handleClick);
-        };
+        if (typeof window === 'undefined') return;
+        try {
+            const tenantsRaw = localStorage.getItem('assignedTenants');
+            const selectedRaw = localStorage.getItem('selectedTenantIds');
+            if (tenantsRaw) setAssignedTenants(JSON.parse(tenantsRaw));
+            if (selectedRaw) setSelectedTenantIds(JSON.parse(selectedRaw));
+        } catch (_) { }
     }, []);
-    const [inputsearch, setInputsearch] = useState(false);
-    const [InputValue, setInputValue] = useState("");
-    const [search, setSearch] = useState(false);
-    const [searchcolor, setsearchcolor] = useState("text-dark");
-    const [searchval, setsearchval] = useState("Type something");
-    const [NavData, setNavData] = useState([]);
-
-    useEffect(() => {
-        const clickHandler = (_event: MouseEvent) => {
-            const searchResult = document.querySelector(".search-result");
-            if (searchResult) {
-                searchResult.classList.add("d-none");
-            }
-        };
-
-        document.addEventListener("click", clickHandler);
-
-        return () => {
-            // Clean up the event listener when the component unmounts
-            document.removeEventListener("click", clickHandler);
-        };
-    }, []);
-
-    const myfunction = (inputvalue: string) => {
-        document.querySelector(".search-result")?.classList.remove("d-none");
-
-        const i: Menuitemtype[] = [];
-        const allElement2: Menuitemtype[] = [];
-        MENUITEMS.forEach((mainLevel: Menuitemtype) => {
-            if (mainLevel.children) {
-                setInputsearch(true);
-                mainLevel.children.forEach((subLevel: Menuitemtype) => {
-                    i.push(subLevel);
-                    if (subLevel.children) {
-                        subLevel.children.forEach((subLevel1: Menuitemtype) => {
-                            i.push(subLevel1);
-                            if (subLevel1.children) {
-                                subLevel1.children.forEach((subLevel2: Menuitemtype) => {
-                                    i.push(subLevel2);
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-        });
-        for (const allElement of i) {
-            if (allElement.title.toLowerCase().includes(inputvalue.toLowerCase())) {
-                if (allElement.title.toLowerCase().startsWith(inputvalue.toLowerCase())) {
-                    setSearch(true);
-
-                    // Check if the element has a path and doesn't already exist in allElement2 before pushing
-                    if (allElement.path && !allElement2.some((el) => el.title === allElement.title)) {
-                        allElement2.push(allElement);
-                    }
-                }
-            }
-        }
-
-        if (!allElement2.length || inputvalue === "") {
-            if (inputvalue === "") {
-                setSearch(false);
-                setsearchval("Type something");
-                setsearchcolor("text-dark");
-            }
-            if (!allElement2.length) {
-                setSearch(false);
-                setsearchcolor("text-danger");
-                setsearchval("There is no component with this name");
-            }
-        }
-        setNavData(allElement2);
-
+    const onTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        const next = value === 'all' ? 'all' : value;
+        setSelectedTenantIds(next);
+        if (typeof window !== 'undefined') localStorage.setItem('selectedTenantIds', JSON.stringify(next));
     };
+    const tenantOptions = useMemo(() => [{ id: 'all', name: 'All tenants' }, ...assignedTenants], [assignedTenants]);
 
-    //Responsive Search
-    const [responsiveSearch, setResponsiveSearch] = useState(false);
-
-    const handleClose1 = () => setResponsiveSearch(false);
-    const handleSearchModal = () => setResponsiveSearch(true);
-
-    //Cart-Dropdown
-    const [cartItems, setCartItems] = useState([...cartProduct]);
-    const [cartItemCount, setCartItemCount] = useState(cartProduct.length);
-    const handleRemove = (itemId: number, event: { stopPropagation: () => void; }) => {
-        event.stopPropagation();
-        const updatedCart = cartItems.filter((item) => item.id !== itemId);
-        setCartItems(updatedCart);
-        setCartItemCount(updatedCart.length);
-    };
+    // Cart removed
     ////Notifications
 
     const [notifications, setNotifications] = useState(Notifications); // assuming 'data' is an array of notifications
@@ -371,7 +277,7 @@ const Header: React.FC<HeaderProps> = () => {
 
     const hasNotifications = notifications.length > 0;
 
-    const handleRemove1 = (id: number, event: React.MouseEventHandler<HTMLAnchorElement>) => {
+    const handleRemove1 = (id: number, event: React.MouseEvent<HTMLAnchorElement>) => {
         event.stopPropagation();
         // Filter out the notification by id
         const updatedNotifications = notifications.filter((notification) => notification.id !== id);
@@ -412,38 +318,14 @@ const Header: React.FC<HeaderProps> = () => {
                         </div>
                         {/*<!-- End::header-element -->*/}
 
-                        {/*<!-- Start::header-element -->*/}
-                        <div className="header-element header-search d-md-block d-none my-auto auto-complete-search">
-                            {/*<!-- Start::header-link -->*/}
-                            <Form.Control onClick={() => { }}
-                                autoComplete="off"
-                                ref={searchRef}
-                                defaultValue={InputValue}
-                                onChange={(ele => { myfunction(ele.target.value); setInputValue(ele.target.value); })} autoCapitalize="off" type="text" className="header-search-bar form-control" id="header-search" placeholder="Search anything here ..." spellCheck={false} />
-                            {inputsearch ?
-                                <Card className="custom-card search-result position-absolute">
-                                    <Card.Header className="">
-                                        <div className="card-title mb-0 text-break fs-20">Search result of {InputValue}</div>
-                                    </Card.Header>
-                                    <Card.Body className='overflow-auto'>
-                                        <SpkListgroup CustomClass=''>
-                                            {search ?
-                                                NavData.map((e: string) =>
-                                                    <ListGroup.Item key={Math.random()} className="">
-                                                        <Link href={`${e.path}/`} className='search-result-item' onClick={() => { setInputsearch(false), setInputValue(""); }}><i className="fa fa-angle-double-right me-2 rtl-transform-icon d-inline-block"></i>{e.title}</Link>
-                                                    </ListGroup.Item>
-                                                )
-                                                : <b className={`${searchcolor} `}>{searchval}</b>}
-                                        </SpkListgroup>
-                                    </Card.Body>
-                                </Card>
-                                : ""}
-                            <Link scroll={false} href="#!" className="header-search-icon border-0">
-                                <i className="ri-search-line"></i>
-                            </Link >
-                            {/*<!-- End::header-link -->*/}
+                        {/* Tenant Switcher (replaces search) */}
+                        <div className="header-element d-md-block d-none my-auto" style={{ minWidth: 220 }}>
+                            <Form.Select size="sm" value={typeof selectedTenantIds === 'string' ? selectedTenantIds : 'all'} onChange={onTenantChange}>
+                                {tenantOptions.map((t) => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </Form.Select>
                         </div>
-                        {/*<!-- End::header-element -->*/}
 
                     </div>
                     {/*<!-- End::header-content-left -->*/}
@@ -451,90 +333,9 @@ const Header: React.FC<HeaderProps> = () => {
                     {/*<!-- Start::header-content-right -->*/}
                     <ul className="header-content-right">
 
-                        {/*<!-- Start::header-element -->*/}
-                        <li className="header-element d-md-none d-block">
-                            <Link scroll={false} href="#!" className="header-link" data-bs-toggle="modal" data-bs-target="#header-responsive-search" onClick={handleSearchModal}>
-                                {/*<!-- Start::header-link-icon -->*/}
-                                <i className="bi bi-search header-link-icon"></i>
-                                {/*<!-- End::header-link-icon -->*/}
-                            </Link>
-                        </li>
-                        {/*<!-- End::header-element -->*/}
+                        {/* mobile search removed */}
 
-                        {/*<!-- Start::header-element -->*/}
-                        <SpkDropdown Customclass="header-element country-selector" autoClose="outside" toggleas="a" Navigate='#!' Customtoggleclass='header-link dropdown-toggle no-caret' Svgicon='m10.5 21 5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 0 1 6-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 0 1-3.827-5.802'
-                            SvgClass='w-6 h-6 header-link-icon' Svg={true} Menuclass='main-header-dropdown dropdown-menu-end' Align="end">
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <div className="d-flex align-items-center justify-content-between">
-                                        <div className="d-flex align-items-center">
-                                            <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                                <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/us_flag.jpg`} alt="img" />
-                                            </span>
-                                            English
-                                        </div>
-                                    </div>
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/spain_flag.jpg`} alt="img" />
-                                    </span>
-                                    español
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/french_flag.jpg`} alt="img" />
-                                    </span>
-                                    français
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/uae_flag.jpg`} alt="img" />
-                                    </span>
-                                    عربي
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/germany_flag.jpg`} alt="img" />
-                                    </span>
-                                    Deutsch
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/china_flag.jpg`} alt="img" />
-                                    </span>
-                                    中国人
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/italy_flag.jpg`} alt="img" />
-                                    </span>
-                                    Italiano
-                                </Dropdown.Item>
-                            </li>
-                            <li>
-                                <Dropdown.Item className="dropdown-item d-flex align-items-center" href="#!">
-                                    <span className="avatar avatar-rounded avatar-xs lh-1 me-2">
-                                        <Image height={28} width={28} src={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/flags/russia_flag.jpg`} alt="img" />
-                                    </span>
-                                    Русский
-                                </Dropdown.Item>
-                            </li>
-                        </SpkDropdown>
-
-                        {/*<!-- End::header-element -->*/}
+                        {/* language switcher removed */}
 
                         {/*<!-- Start::header-element -->*/}
                         <li className="header-element header-theme-mode">
@@ -559,69 +360,7 @@ const Header: React.FC<HeaderProps> = () => {
                         </li>
                         {/*<!-- End::header-element -->*/}
 
-                        {/*<!-- Start::header-element -->*/}
-                        <SpkDropdown Imagename='' Customclass="header-element cart-dropdown" toggleas="a" Navigate='#!' Svg={true} Customtoggleclass='header-link dropdown-toggle no-caret' Badgetag={true} Badgeclass='header-icon-badge' Menuclass='main-header-dropdown dropdown-menu-end'
-                            Badgecolor='info' Badgeid='cart-icon-badge' Badgetext={cartItemCount} Badgepill={true} SvgClass='w-6 h-6 header-link-icon' Svgicon='M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z'>
-                            <div className="p-3">
-                                <div className="d-flex align-items-center justify-content-between">
-                                    <p className="mb-0 fs-15 fw-medium">Cart Items<span className="badge bg-info text-fixed-white ms-1 fs-12 rounded-circle" id="cart-data">{cartItemCount}</span></p>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <span className="fs-12 fw-medium text-muted">Sub Total : </span>
-                                        <h6 className="mb-0"> $740</h6>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="dropdown-divider"></div>
-                            <SimpleBar className="list-unstyled mb-0" id="header-cart-items-scroll" >
-                                {cartItems.slice(0).map((item, index) => (
-                                    <Dropdown.Item as="li" key={index}>
-                                        <div className="d-flex align-items-center cart-dropdown-item gap-3">
-                                            <div className="lh-1">
-                                                <span className="avatar avatar-md avatar-rounded custom-width">
-                                                    <Image fill src={`${process.env.NODE_ENV === 'production' ? basePath : ''}${item.image}`} alt="logo" className='avatar avatar-sm' />
-                                                </span>
-                                            </div>
-                                            <div className="flex-fill">
-                                                <div className="d-flex align-items-center justify-content-between mb-0">
-                                                    <div className="mb-0 fw-medium">
-                                                        <Link scroll={false} href="/apps/ecommerce/cart/">{item.name}</Link>
-                                                        <div className="d-flex gap-2 text-truncate fs-12 fw-normal text-muted lh-1 mt-1">
-                                                            <div className="fs-12">Brand : {item.brand}</div>
-                                                            <div className="vr"></div>
-                                                            <p className="mb-0 header-cart-text text-truncate">
-                                                                Qty : {item.qty} &#x2715; ${item.price}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-end">
-                                                        <Link scroll={false} href="#!" onClick={(event) => handleRemove(item.id, event)} className="header-cart-remove dropdown-item-close">
-                                                            <i className="ri-close-line"></i>
-                                                        </Link>
-                                                        <h6 className="fw-medium mb-0">${item.qty * item.price}</h6>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Dropdown.Item>
-
-                                ))}
-                            </SimpleBar>
-                            <div className={`p-3 empty-header-item border-top d-flex gap-2 align-items-center ${cartItemCount === 0 ? 'd-none' : 'd-block'}`}>
-                                <Link href="/apps/ecommerce/checkout" className={`btn flex-fill btn-primary btn-wave ${cartItemCount === 0 ? 'd-none' : 'd-block'}`}>Proceed to checkout</Link>
-                            </div>
-                            <div className={`p-5 empty-item ${cartItemCount === 0 ? 'd-block' : 'd-none'}`}>
-                                <div className="text-center">
-                                    <span className="avatar avatar-xl avatar-rounded bg-primary-transparent">
-                                        <i className="ri-shopping-cart-2-line fs-2"></i>
-                                    </span>
-                                    <h6 className="fw-medium mb-1 mt-3">Your Cart is Empty</h6>
-                                    <span className="mb-3 fw-normal fs-13 d-block">Add some items to make me happy :)</span>
-                                    <Link href="/apps/ecommerce/products" className="btn btn-primary btn-wave btn-sm m-1" data-abc="true">continue shopping <i className="bi bi-arrow-right ms-1"></i></Link>
-                                </div>
-                            </div>
-                        </SpkDropdown>
-
-                        {/*<!-- End::header-element -->*/}
+                        {/* cart dropdown removed */}
 
                         {/*<!-- Start::header-element -->*/}
                         <SpkDropdown Togglevariant='' toggleas="a" Customtoggleclass='header-link dropdown-toggle no-caret' Customclass="header-element notifications-dropdown d-xl-block d-none" Navigate='#!' Id='messageDropdown' Svg={true} SvgClass='w-6 h-6 header-link-icon' Badgetag={true} Badgecolor='secondary' Badgeclass='header-icon-pulse rounded pulse pulse-secondary custom-header-icon-pulse' Menuclass='main-header-dropdown dropdown-menu-end'
@@ -763,16 +502,6 @@ const Header: React.FC<HeaderProps> = () => {
 
             </header>
             {/*<!-- /app-header -->*/}
-            <Modal show={responsiveSearch} onHide={handleClose1} className="fade" id="header-responsive-search" tabIndex={-1} aria-labelledby="header-responsive-search">
-                <Modal.Body>
-                    <div className="input-group">
-                        <Form.Control type="text" className="border-end-0" placeholder="Search Anything ..."
-                            aria-label="Search Anything ..." aria-describedby="button-addon2" />
-                        <SpkButton Buttonvariant='primary' Buttontype="button"
-                            Id="button-addon2"><i className="bi bi-search"></i></SpkButton>
-                    </div>
-                </Modal.Body>
-            </Modal>
         </Fragment>
     )
 }

@@ -9,13 +9,15 @@ import { CountrySales, notifications, OrdersOverview, OverviewProgress, RecentOr
 import Seo from "@/shared/layouts-components/seo/seo";
 import Image from "next/image";
 import Link from "next/link";
-import React, { Fragment, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bootstrap";
 import DatePicker from "react-datepicker";
 
 interface SalesProps { }
 
 const Sales: React.FC<SalesProps> = () => {
+
+    // Tenant selection is now handled globally in header
 
     const [state, setState] = useState(() => {
         const today = new Date();
