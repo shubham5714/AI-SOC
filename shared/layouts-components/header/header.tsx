@@ -10,6 +10,7 @@ import { Notifications } from '@/shared/data/headerdata';
 import Image from 'next/image';
 import nextConfig from "@/next.config"
 import { ThemeChanger } from '@/shared/redux/actions';
+import DatePicker from "react-datepicker";
 
 interface HeaderProps { }
 
@@ -274,6 +275,57 @@ const Header: React.FC<HeaderProps> = () => {
     };
     const tenantOptions = useMemo(() => [{ id: 'all', name: 'All tenants' }, ...assignedTenants], [assignedTenants]);
 
+    // Date Range Picker (global)
+    const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
+        const today = new Date();
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 7);
+        return [sevenDaysAgo, today];
+    });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            const dateRangeRaw = localStorage.getItem('dateRange');
+            if (dateRangeRaw) {
+                const parsed = JSON.parse(dateRangeRaw);
+                setDateRange([new Date(parsed[0]), new Date(parsed[1])]);
+            }
+        } catch (_) { }
+    }, []);
+
+    const onDateRangeChange = (dates: [Date | null, Date | null] | null) => {
+        console.log('onDateRangeChange called with:', dates);
+        if (dates && Array.isArray(dates) && dates.length === 2) {
+            const [start, end] = dates;
+            if (start && end) {
+                console.log('Both dates selected:', start, end);
+                setDateRange([start, end]);
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('dateRange', JSON.stringify([start.toISOString(), end.toISOString()]));
+                    try {
+                        window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start, end } }));
+                    } catch { }
+                }
+            } else if (start && !end) {
+                // First date selected, keep current end date but dispatch event
+                console.log('First date selected:', start);
+                setDateRange(prev => {
+                    const newRange = [start, prev[1]] as [Date, Date];
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('dateRange', JSON.stringify([start.toISOString(), prev[1].toISOString()]));
+                        try {
+                            window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start, end: prev[1] } }));
+                        } catch { }
+                    }
+                    return newRange;
+                });
+            }
+        } else {
+            console.log('Invalid dates received:', dates);
+        }
+    };
+
     // Cart removed
     ////Notifications
 
@@ -330,6 +382,50 @@ const Header: React.FC<HeaderProps> = () => {
                                     <option key={t.id} value={t.id}>{t.name}</option>
                                 ))}
                             </Form.Select>
+                        </div>
+
+                        {/* Date Range Picker */}
+                        <div className="header-element d-md-block d-none my-auto" style={{ minWidth: 320 }}>
+                            <div className="d-flex gap-2">
+                                <DatePicker 
+                                    className="form-control form-control-sm" 
+                                    selected={dateRange[0]} 
+                                    onChange={(date) => {
+                                        if (date) {
+                                            const newRange = [date, dateRange[1]] as [Date, Date];
+                                            setDateRange(newRange);
+                                            if (typeof window !== 'undefined') {
+                                                localStorage.setItem('dateRange', JSON.stringify([date.toISOString(), dateRange[1].toISOString()]));
+                                                try {
+                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: date, end: dateRange[1] } }));
+                                                } catch { }
+                                            }
+                                        }
+                                    }} 
+                                    placeholderText="Start Date"
+                                    dateFormat="MM/dd/yyyy"
+                                    maxDate={dateRange[1]}
+                                />
+                                <DatePicker 
+                                    className="form-control form-control-sm" 
+                                    selected={dateRange[1]} 
+                                    onChange={(date) => {
+                                        if (date) {
+                                            const newRange = [dateRange[0], date] as [Date, Date];
+                                            setDateRange(newRange);
+                                            if (typeof window !== 'undefined') {
+                                                localStorage.setItem('dateRange', JSON.stringify([dateRange[0].toISOString(), date.toISOString()]));
+                                                try {
+                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: dateRange[0], end: date } }));
+                                                } catch { }
+                                            }
+                                        }
+                                    }} 
+                                    placeholderText="End Date"
+                                    dateFormat="MM/dd/yyyy"
+                                    minDate={dateRange[0]}
+                                />
+                            </div>
                         </div>
 
                     </div>

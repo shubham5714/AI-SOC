@@ -11,7 +11,6 @@ import Image from "next/image";
 import Link from "next/link";
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bootstrap";
-import DatePicker from "react-datepicker";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createClient } from "@supabase/supabase-js";
 
@@ -20,6 +19,13 @@ interface SalesProps { }
 const SalesInner: React.FC = () => {
     // Selected tenants from localStorage (updated when header switcher changes)
     const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
+    const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
+        const today = new Date();
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 7);
+        return [sevenDaysAgo, today];
+    });
+    
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const readSelection = () => {
@@ -31,16 +37,35 @@ const SalesInner: React.FC = () => {
                 setSelectedTenantIds('all');
             }
         };
+        const readDateRange = () => {
+            try {
+                const raw = localStorage.getItem('dateRange');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    setDateRange([new Date(parsed[0]), new Date(parsed[1])]);
+                }
+            } catch {
+                // Keep default date range
+            }
+        };
         readSelection();
+        readDateRange();
+        
         const onStorage = (e: StorageEvent) => {
             if (e.key === 'selectedTenantIds') readSelection();
+            if (e.key === 'dateRange') readDateRange();
         };
         const onTenantEvent = () => readSelection();
+        const onDateEvent = () => readDateRange();
+        
         window.addEventListener('storage', onStorage);
         window.addEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
+        window.addEventListener('dateRangeChanged', onDateEvent as EventListener);
+        
         return () => {
             window.removeEventListener('storage', onStorage);
             window.removeEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
+            window.removeEventListener('dateRangeChanged', onDateEvent as EventListener);
         };
     }, []);
 
@@ -49,9 +74,9 @@ const SalesInner: React.FC = () => {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
     const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
 
-    // Fetch total alerts count from tickets respecting tenant selection
+    // Fetch total alerts count from tickets respecting tenant selection and date range
     const { data: totalAlertsCount } = useQuery({
-        queryKey: ["total-alerts-count", selectedTenantIds],
+        queryKey: ["total-alerts-count", selectedTenantIds, dateRange],
         queryFn: async () => {
             // Resolve tenant filter: 'all' means use all assigned tenants
             let tenantFilter: string[] | null = null;
@@ -75,6 +100,12 @@ const SalesInner: React.FC = () => {
             if (tenantFilter && tenantFilter.length > 0) {
                 query = query.in('tenant_id', tenantFilter as string[]);
             }
+            
+            // Add date range filter if dates are available
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                query = query.gte('created_at', dateRange[0].toISOString()).lte('created_at', dateRange[1].toISOString());
+            }
+            
             const { count, error } = await query;
             if (error) throw error;
             return count ?? 0;
@@ -86,20 +117,13 @@ const SalesInner: React.FC = () => {
     // Tenant selection is now handled globally in header
 
     const [state, setState] = useState(() => {
-        const today = new Date();
-        const thirtyDaysLater = new Date(today);
-        thirtyDaysLater.setDate(today.getDate() + 30);
-
         return {
             checkedItems: RecentOrders.reduce((acc, item) => {
                 acc[item.id] = item.checked || false;
                 return acc;
             }, {} as { [key: number]: boolean }),
             isAllChecked: RecentOrders.every((item) => item.checked),
-            searchTerm: '',
-            dates: {} as { [key: string]: Date | string | null },
-            startDate1: today,
-            endDate1: thirtyDaysLater
+            searchTerm: ''
         };
     });
 
@@ -136,27 +160,6 @@ const SalesInner: React.FC = () => {
         }));
     };
 
-    const handleDateChange = (key: string, date: Date | null) => {
-        setState(prev => {
-            const updatedDates = date
-                ? { ...prev.dates, [key]: date }
-                : Object.fromEntries(Object.entries(prev.dates).filter(([k]) => k !== key));
-            return {
-                ...prev,
-                dates: updatedDates
-            };
-        });
-    };
-
-    const onChange1 = (dates: [Date, Date]) => {
-        const [start, end] = dates;
-        setState(prev => ({
-            ...prev,
-            startDate1: start,
-            endDate1: end
-        }));
-    };
-
     const Recentorders: RecentOrdersType[] = RecentOrders.filter(project =>
         project.category.toLowerCase().includes(state.searchTerm.toLowerCase())
     );
@@ -182,13 +185,7 @@ const SalesInner: React.FC = () => {
                     <p className="fs-13 text-muted mb-0">Manage alerts with AI Insights.</p>
                 </div>
                 <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <div>
-                        <DatePicker className="form-control breadcrumb-input" selected={state.startDate1} onChange={onChange1} startDate={state.startDate1} endDate={state.endDate1} selectsRange placeholderText="Search By Date Range" />
-                    </div>
                     <div className="d-flex align-items-center gap-2">
-                        <SpkButton Buttonvariant="white" Customclass="btn text-default border btn-wave btn-icon">
-                            <i className="ri-upload-cloud-line align-middle"></i>
-                        </SpkButton>
                         <SpkButton Buttonvariant="primary" Customclass="btn btn-wave border-0"> <i className="ri-filter-3-fill me-2 lh-1 align-middle"></i>Filter </SpkButton>
                     </div>
                 </div>
