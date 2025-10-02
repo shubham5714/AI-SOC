@@ -13,10 +13,15 @@ import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bootstrap";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
 
 interface SalesProps { }
 
 const SalesInner: React.FC = () => {
+    const router = useRouter();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    
     // Selected tenants from localStorage (updated when header switcher changes)
     const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
     const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
@@ -25,7 +30,93 @@ const SalesInner: React.FC = () => {
         sevenDaysAgo.setDate(today.getDate() - 7);
         return [sevenDaysAgo, today];
     });
+
+    // State for dashboard functionality
+    const [state, setState] = useState(() => {
+        return {
+            checkedItems: RecentOrders.reduce((acc, item) => {
+                acc[item.id] = item.checked || false;
+                return acc;
+            }, {} as { [key: number]: boolean }),
+            isAllChecked: RecentOrders.every((item) => item.checked),
+            searchTerm: ''
+        };
+    });
     
+    // Supabase client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
+
+    // Fetch total alerts count from tickets respecting tenant selection and date range
+    const { data: totalAlertsCount } = useQuery({
+        queryKey: ["total-alerts-count", selectedTenantIds, dateRange],
+        queryFn: async () => {
+            // Resolve tenant filter: 'all' means use all assigned tenants
+            let tenantFilter: string[] | null = null;
+            if (typeof window !== 'undefined') {
+                try {
+                    const assignedRaw = localStorage.getItem('assignedTenants');
+                    const assigned = assignedRaw ? JSON.parse(assignedRaw) as { id: string; name: string }[] : [];
+                    if (selectedTenantIds === 'all') {
+                        tenantFilter = assigned.map(t => t.id);
+                    } else if (typeof selectedTenantIds === 'string') {
+                        tenantFilter = [selectedTenantIds];
+                    } else {
+                        tenantFilter = selectedTenantIds;
+                    }
+                } catch {
+                    tenantFilter = null;
+                }
+            }
+
+            let query = supabase.from('tickets').select('*', { count: 'exact', head: true });
+            if (tenantFilter && tenantFilter.length > 0) {
+                query = query.in('tenant_id', tenantFilter as string[]);
+            }
+            
+            // Add date range filter if dates are available
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                query = query.gte('created_at', dateRange[0].toISOString()).lte('created_at', dateRange[1].toISOString());
+            }
+            
+            const { count, error } = await query;
+            if (error) throw error;
+            return count ?? 0;
+        },
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        enabled: isAuthenticated // Only run query when authenticated
+    });
+
+    // Memoized cards data
+    const cards = useMemo(() => {
+        const cloned = [...SelesCardData];
+        if (cloned.length > 0 && typeof totalAlertsCount === 'number') {
+            cloned[0] = { ...cloned[0], title: totalAlertsCount.toString() };
+        }
+        return cloned;
+    }, [totalAlertsCount]);
+
+    // Check authentication
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error || !user) {
+                    router.push('/');
+                    return;
+                }
+                setIsAuthenticated(true);
+            } catch (error) {
+                router.push('/');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        checkAuth();
+    }, [router, supabase.auth]);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const readSelection = () => {
@@ -69,63 +160,25 @@ const SalesInner: React.FC = () => {
         };
     }, []);
 
-    // Supabase client
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
+    // Show loading or redirect if not authenticated
+    if (isLoading) {
+        return (
+            <Fragment>
+                <Seo title="Dashboard" />
+                <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </Fragment>
+        );
+    }
 
-    // Fetch total alerts count from tickets respecting tenant selection and date range
-    const { data: totalAlertsCount } = useQuery({
-        queryKey: ["total-alerts-count", selectedTenantIds, dateRange],
-        queryFn: async () => {
-            // Resolve tenant filter: 'all' means use all assigned tenants
-            let tenantFilter: string[] | null = null;
-            if (typeof window !== 'undefined') {
-                try {
-                    const assignedRaw = localStorage.getItem('assignedTenants');
-                    const assigned = assignedRaw ? JSON.parse(assignedRaw) as { id: string; name: string }[] : [];
-                    if (selectedTenantIds === 'all') {
-                        tenantFilter = assigned.map(t => t.id);
-                    } else if (typeof selectedTenantIds === 'string') {
-                        tenantFilter = [selectedTenantIds];
-                    } else {
-                        tenantFilter = selectedTenantIds;
-                    }
-                } catch {
-                    tenantFilter = null;
-                }
-            }
-
-            let query = supabase.from('tickets').select('*', { count: 'exact', head: true });
-            if (tenantFilter && tenantFilter.length > 0) {
-                query = query.in('tenant_id', tenantFilter as string[]);
-            }
-            
-            // Add date range filter if dates are available
-            if (dateRange && dateRange[0] && dateRange[1]) {
-                query = query.gte('created_at', dateRange[0].toISOString()).lte('created_at', dateRange[1].toISOString());
-            }
-            
-            const { count, error } = await query;
-            if (error) throw error;
-            return count ?? 0;
-        },
-        staleTime: 30_000,
-        refetchOnWindowFocus: false
-    });
+    if (!isAuthenticated) {
+        return null; // Will redirect to login
+    }
 
     // Tenant selection is now handled globally in header
-
-    const [state, setState] = useState(() => {
-        return {
-            checkedItems: RecentOrders.reduce((acc, item) => {
-                acc[item.id] = item.checked || false;
-                return acc;
-            }, {} as { [key: number]: boolean }),
-            isAllChecked: RecentOrders.every((item) => item.checked),
-            searchTerm: ''
-        };
-    });
 
 
     const handleSelectAllChange = () => {
@@ -163,16 +216,6 @@ const SalesInner: React.FC = () => {
     const Recentorders: RecentOrdersType[] = RecentOrders.filter(project =>
         project.category.toLowerCase().includes(state.searchTerm.toLowerCase())
     );
-
-
-
-    const cards = useMemo(() => {
-        const cloned = [...SelesCardData];
-        if (cloned.length > 0 && typeof totalAlertsCount === 'number') {
-            cloned[0] = { ...cloned[0], title: totalAlertsCount.toString() };
-        }
-        return cloned;
-    }, [totalAlertsCount]);
 
     return (
 

@@ -6,19 +6,169 @@ import Pageheader from "@/shared/layouts-components/pageheader/pageheader";
 import Seo from "@/shared/layouts-components/seo/seo";
 import Image from "next/image";
 import Link from "next/link";
-import React, { Fragment, useState } from "react";
-import { Col, Form, Nav, Tab } from "react-bootstrap";
+import React, { Fragment, useState, useEffect, useMemo } from "react";
+import { Col, Form, Nav, Tab, Card, Alert } from "react-bootstrap";
+import { createClient } from '@supabase/supabase-js';
+import { toast } from 'react-toastify';
 
 interface ProfileSettingsProps { }
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
     const [toggles, setToggles] = useState<{ [key: string]: string }>({});
+    
+    // MFA State
+    const [mfaFactors, setMfaFactors] = useState<any[]>([]);
+    const [mfaEnrollment, setMfaEnrollment] = useState<{
+        qrCode: string | null;
+        secret: string | null;
+        factorId: string | null;
+        isEnrolling: boolean;
+        isVerifying: boolean;
+    }>({
+        qrCode: null,
+        secret: null,
+        factorId: null,
+        isEnrolling: false,
+        isVerifying: false
+    });
+    const [verificationCode, setVerificationCode] = useState('');
+    
+    // Supabase client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
 
     const toggle = (toggleKey: string) => {
         setToggles((prevState) => ({
             ...prevState,
             [toggleKey]: prevState[toggleKey] === 'on' ? 'off' : 'on',
         }));
+    };
+
+    // Load MFA factors on component mount
+    useEffect(() => {
+        loadMfaFactors();
+    }, []);
+
+    const loadMfaFactors = async () => {
+        try {
+            const { data: factors, error } = await supabase.auth.mfa.listFactors();
+            if (error) {
+                console.error('Error loading MFA factors:', error);
+                return;
+            }
+            setMfaFactors(factors?.totp || []);
+        } catch (error) {
+            console.error('Error loading MFA factors:', error);
+        }
+    };
+
+    const startMfaEnrollment = async () => {
+        try {
+            setMfaEnrollment(prev => ({ ...prev, isEnrolling: true }));
+            
+            const { data, error } = await supabase.auth.mfa.enroll({
+                factorType: 'totp'
+            });
+            
+            if (error) {
+                throw error;
+            }
+            
+            setMfaEnrollment(prev => ({
+                ...prev,
+                qrCode: data.qr_code,
+                secret: data.secret,
+                factorId: data.id,
+                isEnrolling: false
+            }));
+            
+            toast.success('MFA enrollment started. Scan the QR code with your authenticator app.', {
+                position: 'top-right',
+                autoClose: 5000,
+            });
+        } catch (error: any) {
+            console.error('Error starting MFA enrollment:', error);
+            toast.error(error.message || 'Failed to start MFA enrollment', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+            setMfaEnrollment(prev => ({ ...prev, isEnrolling: false }));
+        }
+    };
+
+    const verifyMfaEnrollment = async () => {
+        if (!mfaEnrollment.factorId || !verificationCode) {
+            toast.error('Please enter the verification code', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+            return;
+        }
+
+        try {
+            setMfaEnrollment(prev => ({ ...prev, isVerifying: true }));
+            
+            const { data, error } = await supabase.auth.mfa.verify({
+                factorId: mfaEnrollment.factorId,
+                code: verificationCode
+            });
+            
+            if (error) {
+                throw error;
+            }
+            
+            // Clear enrollment state
+            setMfaEnrollment({
+                qrCode: null,
+                secret: null,
+                factorId: null,
+                isEnrolling: false,
+                isVerifying: false
+            });
+            setVerificationCode('');
+            
+            // Reload factors
+            await loadMfaFactors();
+            
+            toast.success('MFA successfully enabled!', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+        } catch (error: any) {
+            console.error('Error verifying MFA enrollment:', error);
+            toast.error(error.message || 'Invalid verification code', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+            setMfaEnrollment(prev => ({ ...prev, isVerifying: false }));
+        }
+    };
+
+    const removeMfaFactor = async (factorId: string) => {
+        try {
+            const { error } = await supabase.auth.mfa.unenroll({
+                factorId: factorId
+            });
+            
+            if (error) {
+                throw error;
+            }
+            
+            // Reload factors
+            await loadMfaFactors();
+            
+            toast.success('MFA factor removed successfully', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+        } catch (error: any) {
+            console.error('Error removing MFA factor:', error);
+            toast.error(error.message || 'Failed to remove MFA factor', {
+                position: 'top-right',
+                autoClose: 3000,
+            });
+        }
     };
 
     interface Languageoptions1 {
@@ -195,11 +345,102 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
                                     </div>
                                     <div className="d-sm-flex d-block align-items-top justify-content-between mt-3">
                                         <div className="w-50">
-                                            <p className="fs-14 mb-1 fw-medium">Login Verification</p>
-                                            <p className="fs-12 mb-0 text-muted">This helps protect accounts from unauthorized access, even if a password is compromised.</p>
+                                            <p className="fs-14 mb-1 fw-medium">Multi-Factor Authentication (MFA)</p>
+                                            <p className="fs-12 mb-0 text-muted">Add an extra layer of security to your account using Google Authenticator or similar apps.</p>
                                         </div>
-                                        <Link scroll={false} href="#!" className="link-primary text-decoration-underline">Set Up Verification</Link>
+                                        <div className="d-flex flex-column gap-2">
+                                            {mfaFactors.length === 0 ? (
+                                                <SpkButton 
+                                                    Buttonvariant="primary" 
+                                                    Size="sm"
+                                                    onClick={startMfaEnrollment}
+                                                    disabled={mfaEnrollment.isEnrolling}
+                                                >
+                                                    {mfaEnrollment.isEnrolling ? 'Setting up...' : 'Enable MFA'}
+                                                </SpkButton>
+                                            ) : (
+                                                <div className="d-flex flex-column gap-2">
+                                                    <Alert variant="success" className="mb-0 py-2">
+                                                        <i className="ri-shield-check-line me-2"></i>
+                                                        MFA is enabled ({mfaFactors.length} factor{mfaFactors.length > 1 ? 's' : ''})
+                                                    </Alert>
+                                                    {mfaFactors.map((factor) => (
+                                                        <div key={factor.id} className="d-flex align-items-center justify-content-between p-2 border rounded">
+                                                            <span className="fs-12">
+                                                                <i className="ri-smartphone-line me-2"></i>
+                                                                TOTP Factor
+                                                            </span>
+                                                            <SpkButton 
+                                                                Buttonvariant="danger" 
+                                                                Size="sm"
+                                                                onClick={() => removeMfaFactor(factor.id)}
+                                                            >
+                                                                Remove
+                                                            </SpkButton>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
+                                    
+                                    {/* MFA Enrollment UI */}
+                                    {mfaEnrollment.qrCode && (
+                                        <Card className="mt-3">
+                                            <Card.Body>
+                                                <h6 className="mb-3">Complete MFA Setup</h6>
+                                                <div className="row">
+                                                    <Col md={6}>
+                                                        <p className="fs-12 mb-2">1. Scan this QR code with your authenticator app:</p>
+                                                        <div className="text-center p-3 border rounded bg-light">
+                                                            <img 
+                                                                src={mfaEnrollment.qrCode} 
+                                                                alt="MFA QR Code" 
+                                                                style={{ maxWidth: '200px', height: 'auto' }}
+                                                            />
+                                                        </div>
+                                                        <p className="fs-12 mt-2 text-muted">
+                                                            Or manually enter this secret: <code className="fs-11">{mfaEnrollment.secret}</code>
+                                                        </p>
+                                                    </Col>
+                                                    <Col md={6}>
+                                                        <p className="fs-12 mb-2">2. Enter the 6-digit code from your app:</p>
+                                                        <Form.Control
+                                                            type="text"
+                                                            placeholder="000000"
+                                                            value={verificationCode}
+                                                            onChange={(e) => setVerificationCode(e.target.value)}
+                                                            maxLength={6}
+                                                            className="mb-3"
+                                                        />
+                                                        <div className="d-flex gap-2">
+                                                            <SpkButton 
+                                                                Buttonvariant="success" 
+                                                                Size="sm"
+                                                                onClick={verifyMfaEnrollment}
+                                                                disabled={mfaEnrollment.isVerifying || verificationCode.length !== 6}
+                                                            >
+                                                                {mfaEnrollment.isVerifying ? 'Verifying...' : 'Verify & Enable'}
+                                                            </SpkButton>
+                                                            <SpkButton 
+                                                                Buttonvariant="secondary" 
+                                                                Size="sm"
+                                                                onClick={() => setMfaEnrollment({
+                                                                    qrCode: null,
+                                                                    secret: null,
+                                                                    factorId: null,
+                                                                    isEnrolling: false,
+                                                                    isVerifying: false
+                                                                })}
+                                                            >
+                                                                Cancel
+                                                            </SpkButton>
+                                                        </div>
+                                                    </Col>
+                                                </div>
+                                            </Card.Body>
+                                        </Card>
+                                    )}
                                     <div className="d-sm-flex d-block align-items-top justify-content-between mt-3">
                                         <div className="w-50">
                                             <p className="fs-14 mb-1 fw-medium">Password Verification</p>
