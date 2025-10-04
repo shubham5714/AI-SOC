@@ -14,6 +14,7 @@ export type Menuitemtype = {
   background?: string;
   doublToggle?: boolean;
   ctive?: boolean;
+  roles?: string[]; // Array of roles that can see this menu item
 };
 
 const Dashboardicon = <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 side-menu__icon" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"></path></svg>
@@ -50,35 +51,42 @@ export const MENUITEMS: Menuitemtype[] = [
 
   {
     menutitle: "Main",
+    roles: ["MSSP Admin", "Viewer", "Admin", "Analyst"]
   },
 
   {
-    title: "Dashboards", icon: Dashboardicon, type: "sub", active: false, dirchange: false, children: [
-      { path: "/dashboards/sales", type: "link", active: false, selected: false, dirchange: false, title: "Sales" },
-      { path: "/dashboards/analytics", type: "link", active: false, selected: false, dirchange: false, title: "Analytics" },
-      { path: "/dashboards/ecommerce", type: "link", active: false, selected: false, dirchange: false, title: "Ecommerce" },
-      { path: "/dashboards/crm", type: "link", active: false, selected: false, dirchange: false, title: "CRM" },
-      { path: "/dashboards/hrm", type: "link", active: false, selected: false, dirchange: false, title: "HRM" },
-      { path: "/dashboards/nft", type: "link", active: false, selected: false, dirchange: false, title: "NFT" },
-      { path: "/dashboards/crypto", type: "link", active: false, selected: false, dirchange: false, title: "Crypto" },
-      { path: "/dashboards/jobs", type: "link", active: false, selected: false, dirchange: false, title: "Jobs" },
-      { path: "/dashboards/projects", type: "link", active: false, selected: false, dirchange: false, title: "Projects" },
-      { path: "/dashboards/courses", type: "link", active: false, selected: false, dirchange: false, title: "Courses" },
-      { path: "/dashboards/stocks", type: "link", active: false, selected: false, dirchange: false, title: "Stocks" },
-      { path: "/dashboards/medical", type: "link", active: false, selected: false, dirchange: false, title: "Medical" },
-      { path: "/dashboards/pos-system", type: "link", active: false, selected: false, dirchange: false, title: "POS System" },
-      { path: "/dashboards/podcast", type: "link", active: false, selected: false, dirchange: false, title: "Podcast" },
-      { path: "/dashboards/school", type: "link", active: false, selected: false, dirchange: false, title: "School" },
-      { path: "/dashboards/social-media", type: "link", active: false, selected: false, dirchange: false, title: "Social Media" },
+    title: "Dashboards", icon: Dashboardicon, type: "sub", active: false, dirchange: false, roles: ["MSSP Admin", "Viewer", "Admin", "Analyst"], children: [
+      { path: "/dashboards/sales", type: "link", active: false, selected: false, dirchange: false, title: "Sales", roles: ["MSSP Admin"] },
+      { path: "/dashboards/analytics", type: "link", active: false, selected: false, dirchange: false, title: "Analytics", roles: ["MSSP Admin"] },
+      { path: "/dashboards/ecommerce", type: "link", active: false, selected: false, dirchange: false, title: "Ecommerce", roles: ["MSSP Admin"] },
+      { path: "/dashboards/crm", type: "link", active: false, selected: false, dirchange: false, title: "CRM", roles: ["MSSP Admin"] },
+      { path: "/dashboards/hrm", type: "link", active: false, selected: false, dirchange: false, title: "HRM", roles: ["MSSP Admin"] },
+      { path: "/dashboards/nft", type: "link", active: false, selected: false, dirchange: false, title: "NFT", roles: ["MSSP Admin"] },
+      { path: "/dashboards/crypto", type: "link", active: false, selected: false, dirchange: false, title: "Crypto", roles: ["MSSP Admin"] },
+      { path: "/dashboards/jobs", type: "link", active: false, selected: false, dirchange: false, title: "Jobs", roles: ["MSSP Admin"] },
+      { path: "/dashboards/projects", type: "link", active: false, selected: false, dirchange: false, title: "Projects", roles: ["MSSP Admin"] },
+      { path: "/dashboards/courses", type: "link", active: false, selected: false, dirchange: false, title: "Courses", roles: ["MSSP Admin"] },
+      { path: "/dashboards/stocks", type: "link", active: false, selected: false, dirchange: false, title: "Stocks", roles: ["MSSP Admin"] },
+      { path: "/dashboards/medical", type: "link", active: false, selected: false, dirchange: false, title: "Medical", roles: ["MSSP Admin"] },
+      { path: "/dashboards/pos-system", type: "link", active: false, selected: false, dirchange: false, title: "POS System", roles: ["MSSP Admin"] },
+      { path: "/dashboards/podcast", type: "link", active: false, selected: false, dirchange: false, title: "Podcast", roles: ["MSSP Admin"] },
+      { path: "/dashboards/school", type: "link", active: false, selected: false, dirchange: false, title: "School", roles: ["MSSP Admin"] },
+      { path: "/dashboards/social-media", type: "link", active: false, selected: false, dirchange: false, title: "Social Media", roles: ["MSSP Admin"] },
+      { path: "/dashboards/ecommerce", type: "link", active: false, selected: false, dirchange: false, title: "Executive", roles: ["MSSP Admin", "Viewer", "Admin", "Analyst"] },
     ]
   },
 
   {
-    menutitle: "WEB APPS"
+    title: "Tickets", icon: Appsicon, type: "link", path: "/apps/task/list-view", active: false, selected: false, dirchange: false, roles: ["MSSP Admin", "Viewer", "Admin", "Analyst"]
   },
 
   {
-    title: "Apps", icon: Appsicon, type: "sub", active: false, selected: false, dirchange: false, children: [
+    menutitle: "WEB APPS",
+    roles: ["MSSP Admin"]
+  },
+
+  {
+    title: "Apps", icon: Appsicon, type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
 
       {
         title: "Ecommerce", type: "sub", active: false, dirchange: false, children: [
@@ -163,6 +171,7 @@ export const MENUITEMS: Menuitemtype[] = [
     active: false,
     dirchange: false,
     type: "sub",
+    roles: ["MSSP Admin"],
     children: [
       {
         path: "",
@@ -210,10 +219,11 @@ export const MENUITEMS: Menuitemtype[] = [
     ],
   },
   {
-    menutitle: "Pages"
+    menutitle: "Pages",
+    roles: ["MSSP Admin"]
   },
   {
-    icon: Authenticationicon, title: "Authentication", type: "sub", active: false, selected: false, dirchange: false, children: [
+    icon: Authenticationicon, title: "Authentication", type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/authentication/coming-soon", type: "link", active: false, selected: false, title: "Coming Soon" },
 
       {
@@ -256,7 +266,7 @@ export const MENUITEMS: Menuitemtype[] = [
     ]
   },
   {
-    icon: Erroricon, title: "Error", type: "sub", active: false, selected: false, dirchange: false, children: [
+    icon: Erroricon, title: "Error", type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
 
       { path: "/authentication/error/401-error", type: "link", active: false, selected: false, dirchange: false, title: "401-Error" },
       { path: "/authentication/error/404-error", type: "link", active: false, selected: false, dirchange: false, title: "404-Error" },
@@ -264,7 +274,7 @@ export const MENUITEMS: Menuitemtype[] = [
     ]
   },
   {
-    icon: Pagesicon, title: "Pages", type: "sub", active: false, dirchange: false, children: [
+    icon: Pagesicon, title: "Pages", type: "sub", active: false, dirchange: false, roles: ["MSSP Admin"], children: [
       {
         title: "Blog", type: "sub", active: false, dirchange: false, children: [
           { path: "/pages/blog/blog", type: "link", active: false, selected: false, dirchange: false, title: "Blog" },
@@ -304,10 +314,11 @@ export const MENUITEMS: Menuitemtype[] = [
     ]
   },
   {
-    menutitle: "General"
+    menutitle: "General",
+    roles: ["MSSP Admin"]
   },
   {
-    title: "Forms", icon: Formsicon, type: "sub", active: false, selected: false, dirchange: false, children: [
+    title: "Forms", icon: Formsicon, type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
 
       { path: "/forms/form-advanced", type: "link", active: false, selected: false, dirchange: false, title: "Form Advanced" },
 
@@ -334,7 +345,7 @@ export const MENUITEMS: Menuitemtype[] = [
     ],
   },
   {
-    title: "Ui Elements", icon: Elementsicon, type: "sub", active: false, selected: false, dirchange: false, children: [
+    title: "Ui Elements", icon: Elementsicon, type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/ui-elements/alerts", type: "link", active: false, selected: false, dirchange: false, title: "Alerts" },
       { path: "/ui-elements/badge", type: "link", active: false, selected: false, dirchange: false, title: "Badge" },
       { path: "/ui-elements/breadcrumb", type: "link", active: false, selected: false, dirchange: false, title: "Breadcrumb" },
@@ -357,7 +368,7 @@ export const MENUITEMS: Menuitemtype[] = [
     ],
   },
   {
-    title: "Advanced Ui", icon: Advanceuiicon, type: "sub", active: false, selected: false, dirchange: false, children: [
+    title: "Advanced Ui", icon: Advanceuiicon, type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/advanced-ui/accordions-collapse", type: "link", active: false, selected: false, dirchange: false, title: "Accordions & collapse" },
       { path: "/advanced-ui/carousel", type: "link", active: false, selected: false, dirchange: false, title: "Carousel" },
       { path: "/advanced-ui/draggable-cards", type: "link", active: false, selected: false, dirchange: false, title: "Draggable Cards" },
@@ -374,7 +385,7 @@ export const MENUITEMS: Menuitemtype[] = [
     ],
   },
   {
-    title: "Utilities", icon: Utilitiesicon, type: "sub", active: false, selected: false, dirchange: false, children: [
+    title: "Utilities", icon: Utilitiesicon, type: "sub", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/utilities/avatars", type: "link", active: false, selected: false, dirchange: false, title: "Avatars" },
       { path: "/utilities/borders", type: "link", active: false, selected: false, dirchange: false, title: "Borders" },
       { path: "/utilities/breakpoints", type: "link", active: false, selected: false, dirchange: false, title: "Breakpoints" },
@@ -389,12 +400,13 @@ export const MENUITEMS: Menuitemtype[] = [
 
     ],
   },
-  { path: "/widgets", title: "widgets", icon: Widgetsicon, type: "link", active: false, dirchange: false, selected: false },
+  { path: "/widgets", title: "widgets", icon: Widgetsicon, type: "link", active: false, dirchange: false, selected: false, roles: ["MSSP Admin"] },
   {
-    menutitle: "Tables & Charts"
+    menutitle: "Tables & Charts",
+    roles: ["MSSP Admin"]
   },
   {
-    title: "Charts", icon: Chartsicon, type: "sub", dirchange: false, children: [
+    title: "Charts", icon: Chartsicon, type: "sub", dirchange: false, roles: ["MSSP Admin"], children: [
       {
         title: "Apex Charts", type: "sub", menusub: true, active: false, selected: false, dirchange: false, children: [
 
@@ -424,21 +436,22 @@ export const MENUITEMS: Menuitemtype[] = [
     ],
   },
   {
-    title: "Tables", icon: Tableicon, type: "sub", menutitle: "", active: false, selected: false, dirchange: false, children: [
+    title: "Tables", icon: Tableicon, type: "sub", menutitle: "", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/tables/tables", type: "link", active: false, selected: false, dirchange: false, title: "Tables" },
       { path: "/tables/grid-js-tables", type: "link", active: false, selected: false, dirchange: false, title: "Grid JS Tables" },
       { path: "/tables/data-tables", type: "link", active: false, selected: false, dirchange: false, title: "Data Tables" },
     ],
   },
   {
-    menutitle: "Maps & Icons"
+    menutitle: "Maps & Icons",
+    roles: ["MSSP Admin"]
   },
   {
-    title: "Maps", icon: Mapsicon, type: "sub", background: "hor-rightangle", active: false, selected: false, dirchange: false, children: [
+    title: "Maps", icon: Mapsicon, type: "sub", background: "hor-rightangle", active: false, selected: false, dirchange: false, roles: ["MSSP Admin"], children: [
       { path: "/maps/leaflet-maps", type: "link", active: false, selected: false, dirchange: false, title: "Leaflet Maps" },
       { path: "/maps/pigeon-maps", type: "link", active: false, selected: false, dirchange: false, title: "Pigeon Maps" },
 
     ],
   },
-  { path: "/icons", icon: Icons, type: "link", active: false, selected: false, dirchange: false, title: "Icons" },
+  { path: "/icons", icon: Icons, type: "link", active: false, selected: false, dirchange: false, title: "Icons", roles: ["MSSP Admin"] },
 ]

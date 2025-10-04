@@ -10,14 +10,19 @@ import { Card, Col, Form, Row } from 'react-bootstrap';
 import { toast, ToastContainer } from 'react-toastify';
 import { LocalStorageBackup } from '@/shared/data/switcherdata/switcherdata';
 import { Initialload } from "@/shared/contextapi";
+import { useUpdateTenants } from '@/shared/contextapi/TenantContext';
+import { useUpdateUserData } from '@/shared/contextapi/UserContext';
 
 const Page = () => {
     const { basePath = '' } = nextConfig;
     const bodyRef = useRef<HTMLElement | null>(null);
     const [load, setLoad] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [isProcessingLogin, setIsProcessingLogin] = useState(false);
 
     const theme = useContext(Initialload);
+    const updateTenants = useUpdateTenants();
+    const updateUserData = useUpdateUserData();
     
     useEffect(() => {
         setMounted(true);
@@ -106,6 +111,7 @@ const Page = () => {
                     // MFA verification successful, proceed with user data
                     const userId = verifiedData.user?.id;
                     if (userId) {
+                        // Fetch assigned tenants
                         const { data: tenantRows, error: tenantsError } = await supabase
                             .from('user_tenants')
                             .select('tenant_id, tenants(name)')
@@ -120,9 +126,27 @@ const Page = () => {
                             name: t.tenants?.name 
                         }));
                         
+                        // Fetch user role
+                        const { data: userRoleData, error: roleError } = await supabase
+                            .from('user_roles')
+                            .select('username, role')
+                            .eq('user_id', userId)
+                            .single();
+
+                        if (roleError) {
+                            console.error('Error fetching user role:', roleError);
+                        }
+                        
                         if (mounted) {
-                            localStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
-                            localStorage.setItem('selectedTenantIds', JSON.stringify('all'));
+                            updateTenants(assignedTenants);
+                            
+                            // Store user role in context
+                            if (userRoleData) {
+                                updateUserData({
+                                    username: userRoleData.username,
+                                    role: userRoleData.role
+                                });
+                            }
                         }
                     }
                 } catch (mfaError) {
@@ -140,7 +164,7 @@ const Page = () => {
                 });
                 
                 setTimeout(() => {
-                    router.push("/dashboards/sales");
+                    router.push("/dashboards/ecommerce");
                 }, 1200);
                 return;
             }
@@ -220,6 +244,7 @@ const Page = () => {
             // Regular login successful
             const userId = signInData.user?.id;
             if (userId) {
+                // Fetch assigned tenants
                 const { data: tenantRows, error: tenantsError } = await supabase
                     .from('user_tenants')
                     .select('tenant_id, tenants(name)')
@@ -234,24 +259,45 @@ const Page = () => {
                     name: t.tenants?.name 
                 }));
                 
+                // Fetch user role
+                const { data: userRoleData, error: roleError } = await supabase
+                    .from('user_roles')
+                    .select('username, role')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (roleError) {
+                    console.error('Error fetching user role:', roleError);
+                }
+                
                 if (mounted) {
-                    localStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
-                    localStorage.setItem('selectedTenantIds', JSON.stringify('all'));
+                    sessionStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
+                    sessionStorage.setItem('selectedTenantIds', JSON.stringify('all'));
+                    
+                    // Store user role in session storage
+                    if (userRoleData) {
+                        sessionStorage.setItem('userRole', JSON.stringify({
+                            username: userRoleData.username,
+                            role: userRoleData.role
+                        }));
+                    }
                 }
             }
 
-            toast.success('Login successful', {
-                position: 'top-right',
-                autoClose: 1500,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-            });
-            
-            setTimeout(() => {
-                router.push("/dashboards/sales");
-            }, 1200);
+                toast.success('Login successful', {
+                    position: 'top-right',
+                    autoClose: 1500,
+                    hideProgressBar: false,
+                    closeOnClick: true,
+                    pauseOnHover: true,
+                    draggable: true,
+                });
+                
+                // Show loading spinner while contexts are being processed
+                setIsProcessingLogin(true);
+                setTimeout(() => {
+                    router.push("/dashboards/ecommerce");
+                }, 1200);
         } catch (err: any) {
             setError(err.message || 'Login failed');
             toast.error('Invalid details', {
@@ -371,6 +417,7 @@ const Page = () => {
             // MFA enrollment successful, proceed with user data
             const userId = data.user?.id;
             if (userId) {
+                // Fetch assigned tenants
                 const { data: tenantRows, error: tenantsError } = await supabase
                     .from('user_tenants')
                     .select('tenant_id, tenants(name)')
@@ -385,9 +432,28 @@ const Page = () => {
                     name: t.tenants?.name 
                 }));
                 
+                // Fetch user role
+                const { data: userRoleData, error: roleError } = await supabase
+                    .from('user_roles')
+                    .select('username, role')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (roleError) {
+                    console.error('Error fetching user role:', roleError);
+                }
+                
                 if (mounted) {
-                    localStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
-                    localStorage.setItem('selectedTenantIds', JSON.stringify('all'));
+                    sessionStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
+                    sessionStorage.setItem('selectedTenantIds', JSON.stringify('all'));
+                    
+                    // Store user role in session storage
+                    if (userRoleData) {
+                        sessionStorage.setItem('userRole', JSON.stringify({
+                            username: userRoleData.username,
+                            role: userRoleData.role
+                        }));
+                    }
                 }
             }
             
@@ -408,7 +474,7 @@ const Page = () => {
             });
             
             setTimeout(() => {
-                router.push("/dashboards/sales");
+                router.push("/dashboards/ecommerce");
             }, 1200);
         } catch (error: any) {
             console.error('Error verifying MFA enrollment:', error);
@@ -426,6 +492,25 @@ const Page = () => {
     return (
         <Fragment>
             <ToastContainer />
+            
+            {/* Loading Spinner while processing login */}
+            {isProcessingLogin && (
+                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" 
+                     style={{ 
+                         backgroundColor: 'rgba(255, 255, 255, 0.9)', 
+                         zIndex: 9999,
+                         backdropFilter: 'blur(2px)'
+                     }}>
+                    <div className="text-center">
+                        <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <div className="fs-5 fw-medium text-primary">Processing Login...</div>
+                        <div className="fs-6 text-muted mt-2">Setting up your dashboard</div>
+                    </div>
+                </div>
+            )}
+            
             <html>
                 <body>
                     <div className="container">
@@ -552,47 +637,61 @@ const Page = () => {
                                                 {showMfaEnrollment && mfaEnrollment.qrCode && (
                                                     <Col xl={12}>
                                                         <div className="alert alert-success">
-                                                            <h6 className="alert-heading mb-4">Complete MFA Setup</h6>
-                                                            <div className="row g-4">
-                                                                <div className="col-md-6">
-                                                                    <div className="text-center">
-                                                                        <p className="fs-14 mb-3 fw-medium">1. Scan this QR code with your authenticator app:</p>
-                                                                        <div className="p-4 border rounded bg-light mb-3">
-                                                                            <img 
-                                                                                src={mfaEnrollment.qrCode} 
-                                                                                alt="MFA QR Code" 
-                                                                                style={{ maxWidth: '180px', height: 'auto' }}
-                                                                            />
-                                                                        </div>
-                                                                        <p className="fs-12 text-muted mb-0">
-                                                                            Or manually enter this secret: <br/>
-                                                                            <code className="fs-11 bg-light p-2 rounded d-inline-block mt-1">{mfaEnrollment.secret}</code>
-                                                                        </p>
+                                                            <h6 className="alert-heading mb-4 text-center">Complete MFA Setup</h6>
+                                                            
+                                                            {/* Step 1: QR Code */}
+                                                            <div className="text-center mb-4">
+                                                                <p className="fs-14 mb-3 fw-medium">1. Scan this QR code with your authenticator app:</p>
+                                                                <div className="d-flex justify-content-center">
+                                                                    <div className="p-3 border rounded bg-white">
+                                                                        <img 
+                                                                            src={mfaEnrollment.qrCode} 
+                                                                            alt="MFA QR Code" 
+                                                                            className="img-fluid"
+                                                                            style={{ maxWidth: '180px', height: 'auto' }}
+                                                                        />
                                                                     </div>
                                                                 </div>
-                                                                <div className="col-md-6">
-                                                                    <div className="d-flex flex-column h-100">
-                                                                        <p className="fs-14 mb-3 fw-medium">2. Enter the 6-digit code from your app:</p>
-                                                                        <Form.Control
-                                                                            type="text"
-                                                                            placeholder="000000"
-                                                                            value={otp}
-                                                                            onChange={(e) => setOtp(e.target.value)}
-                                                                            maxLength={6}
-                                                                            className="mb-4 text-center fs-16"
-                                                                            style={{ fontSize: '1.2rem', letterSpacing: '0.2em' }}
-                                                                        />
-                                                                        <div className="d-flex gap-2 mt-auto">
-                                                                            <button 
-                                                                                type="button" 
-                                                                                className="btn btn-success flex-fill"
-                                                                                onClick={verifyMfaEnrollment}
-                                                                                disabled={mfaEnrollment.isVerifying || otp.length !== 6}
-                                                                            >
-                                                                                {mfaEnrollment.isVerifying ? 'Verifying...' : 'Verify & Continue'}
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
+                                                            </div>
+                                                            
+                                                            {/* Step 2: Code Input */}
+                                                            <div className="text-center mb-4">
+                                                                <p className="fs-14 mb-3 fw-medium">2. Enter the 6-digit code from your app:</p>
+                                                                <div className="d-flex justify-content-center">
+                                                                    <Form.Control
+                                                                        type="text"
+                                                                        placeholder="000000"
+                                                                        value={otp}
+                                                                        onChange={(e) => setOtp(e.target.value)}
+                                                                        maxLength={6}
+                                                                        className="text-center fs-16"
+                                                                        style={{ 
+                                                                            fontSize: '1.2rem', 
+                                                                            letterSpacing: '0.2em',
+                                                                            maxWidth: '200px'
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {/* Step 3: Verify Button */}
+                                                            <div className="text-center mb-4">
+                                                                <button 
+                                                                    type="button" 
+                                                                    className="btn btn-success"
+                                                                    onClick={verifyMfaEnrollment}
+                                                                    disabled={mfaEnrollment.isVerifying || otp.length !== 6}
+                                                                >
+                                                                    {mfaEnrollment.isVerifying ? 'Verifying...' : '3. Verify & Continue'}
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            {/* Manual Entry Section */}
+                                                            <div className="text-center">
+                                                                <p className="fs-12 text-muted mb-2">Can't scan the QR code?</p>
+                                                                <p className="fs-12 text-muted mb-3">Manually enter this secret key:</p>
+                                                                <div className="bg-light p-3 rounded border d-inline-block">
+                                                                    <code className="fs-12 text-primary fw-medium">{mfaEnrollment.secret}</code>
                                                                 </div>
                                                             </div>
                                                         </div>

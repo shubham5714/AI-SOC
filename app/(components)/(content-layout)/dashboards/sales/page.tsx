@@ -14,6 +14,9 @@ import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bo
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { useTenantContext } from "@/shared/contextapi/TenantContext";
+import { useUserContext } from "@/shared/contextapi/UserContext";
+import { useDateRangeContext } from "@/shared/contextapi/DateRangeContext";
 
 interface SalesProps { }
 
@@ -22,14 +25,14 @@ const SalesInner: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     
-    // Selected tenants from localStorage (updated when header switcher changes)
-    const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
-    const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
-        const today = new Date();
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
-        return [sevenDaysAgo, today];
-    });
+    // Use tenant context
+    const { assignedTenants, selectedTenantIds, isLoading: tenantLoading } = useTenantContext();
+    
+    // Use user context
+    const { userData, isLoading: userLoading } = useUserContext();
+    
+    // Use date range context
+    const { dateRange, isLoading: dateRangeLoading } = useDateRangeContext();
 
     // State for dashboard functionality
     const [state, setState] = useState(() => {
@@ -54,20 +57,13 @@ const SalesInner: React.FC = () => {
         queryFn: async () => {
             // Resolve tenant filter: 'all' means use all assigned tenants
             let tenantFilter: string[] | null = null;
-            if (typeof window !== 'undefined') {
-                try {
-                    const assignedRaw = localStorage.getItem('assignedTenants');
-                    const assigned = assignedRaw ? JSON.parse(assignedRaw) as { id: string; name: string }[] : [];
-                    if (selectedTenantIds === 'all') {
-                        tenantFilter = assigned.map(t => t.id);
-                    } else if (typeof selectedTenantIds === 'string') {
-                        tenantFilter = [selectedTenantIds];
-                    } else {
-                        tenantFilter = selectedTenantIds;
-                    }
-                } catch {
-                    tenantFilter = null;
-                }
+            
+            if (selectedTenantIds === 'all') {
+                tenantFilter = assignedTenants.map(t => t.id);
+            } else if (typeof selectedTenantIds === 'string') {
+                tenantFilter = [selectedTenantIds];
+            } else {
+                tenantFilter = selectedTenantIds;
             }
 
             let query = supabase.from('tickets').select('*', { count: 'exact', head: true });
@@ -98,6 +94,7 @@ const SalesInner: React.FC = () => {
         return cloned;
     }, [totalAlertsCount]);
 
+
     // Check authentication
     useEffect(() => {
         const checkAuth = async () => {
@@ -117,57 +114,18 @@ const SalesInner: React.FC = () => {
         checkAuth();
     }, [router, supabase.auth]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const readSelection = () => {
-            try {
-                const raw = localStorage.getItem('selectedTenantIds');
-                if (raw) setSelectedTenantIds(JSON.parse(raw));
-                else setSelectedTenantIds('all');
-            } catch {
-                setSelectedTenantIds('all');
-            }
-        };
-        const readDateRange = () => {
-            try {
-                const raw = localStorage.getItem('dateRange');
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    setDateRange([new Date(parsed[0]), new Date(parsed[1])]);
-                }
-            } catch {
-                // Keep default date range
-            }
-        };
-        readSelection();
-        readDateRange();
-        
-        const onStorage = (e: StorageEvent) => {
-            if (e.key === 'selectedTenantIds') readSelection();
-            if (e.key === 'dateRange') readDateRange();
-        };
-        const onTenantEvent = () => readSelection();
-        const onDateEvent = () => readDateRange();
-        
-        window.addEventListener('storage', onStorage);
-        window.addEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
-        window.addEventListener('dateRangeChanged', onDateEvent as EventListener);
-        
-        return () => {
-            window.removeEventListener('storage', onStorage);
-            window.removeEventListener('tenantSelectionChanged', onTenantEvent as EventListener);
-            window.removeEventListener('dateRangeChanged', onDateEvent as EventListener);
-        };
-    }, []);
-
-    // Show loading or redirect if not authenticated
-    if (isLoading) {
+    // Show loading or redirect if not authenticated or contexts are loading
+    if (isLoading || tenantLoading || userLoading || dateRangeLoading) {
         return (
             <Fragment>
                 <Seo title="Dashboard" />
                 <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-                    <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading...</span>
+                    <div className="text-center">
+                        <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <div className="fs-5 fw-medium text-primary">Loading Dashboard...</div>
+                        <div className="fs-6 text-muted mt-2">Preparing your data</div>
                     </div>
                 </div>
             </Fragment>
@@ -224,7 +182,9 @@ const SalesInner: React.FC = () => {
             {/*<!-- Start::page-header -->*/}
             <div className="d-flex align-items-center justify-content-between my-4 page-header-breadcrumb flex-wrap gap-2">
                 <div>
-                    <p className="fw-medium fs-20 mb-0">Hey, Shubham &#128075;</p>
+                    <p className="fw-medium fs-20 mb-0">
+                        Hey, {userData?.username || 'User'} &#128075;
+                    </p>
                     <p className="fs-13 text-muted mb-0">Manage alerts with AI Insights.</p>
                 </div>
                 <div className="d-flex align-items-center gap-2 flex-wrap">

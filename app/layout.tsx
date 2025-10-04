@@ -3,6 +3,9 @@ import React, { Fragment, ReactNode, useState } from 'react'
 import "./globals.scss";
 import { Provider } from 'react-redux'
 import { Initialload } from '@/shared/contextapi';
+import { TenantProvider } from '@/shared/contextapi/TenantContext';
+import { UserProvider } from '@/shared/contextapi/UserContext';
+import { DateRangeProvider } from '@/shared/contextapi/DateRangeContext';
 import store from '@/shared/redux/store';
 
 interface RootLayoutProps {
@@ -17,7 +20,13 @@ const RootLayout: React.FC<RootLayoutProps> = ({ children }) => {
     <Fragment>
       <Provider store={store}>
         <Initialload.Provider value={{ pageloading, setpageloading }}>
-          {children}
+          <UserProvider>
+            <TenantProvider>
+              <DateRangeProvider>
+                {children}
+              </DateRangeProvider>
+            </TenantProvider>
+          </UserProvider>
         </Initialload.Provider>
       </Provider>
     </Fragment>

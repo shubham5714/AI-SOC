@@ -5,18 +5,39 @@ import Switcher from '../switcher/switcher';
 import { data$, getState, setState } from '../services/switcherServices';
 import { Dropdown, Form } from 'react-bootstrap';
 import SpkDropdown from '@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown';
+import SpkButton from '@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons';
 import SimpleBar from 'simplebar-react';
 import { Notifications } from '@/shared/data/headerdata';
 import Image from 'next/image';
 import nextConfig from "@/next.config"
 import { ThemeChanger } from '@/shared/redux/actions';
 import DatePicker from "react-datepicker";
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import { useTenantContext } from '@/shared/contextapi/TenantContext';
+import { useUserContext } from '@/shared/contextapi/UserContext';
+import { useDateRangeContext } from '@/shared/contextapi/DateRangeContext';
 
 interface HeaderProps { }
 
 const Header: React.FC<HeaderProps> = () => {
 
     const { basePath } = nextConfig
+
+    // Supabase client for logout
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const router = useRouter();
+
+    // Use tenant context
+    const { assignedTenants, selectedTenantIds, setSelectedTenantIds, isLoading: tenantLoading } = useTenantContext();
+
+    // Use user context
+    const { userData, isLoading: isLoadingUser } = useUserContext();
+
+    // Use date range context
+    const { dateRange, setDateRange } = useDateRangeContext();
 
     //Menu-Close
     let [variable, setVariable] = useState(getState());
@@ -29,6 +50,28 @@ const Header: React.FC<HeaderProps> = () => {
 
         return () => subscription.unsubscribe(); // Clean up the subscription
     }, []);
+
+    // Logout function
+    const handleLogout = async () => {
+        try {
+            // Clear session storage
+            sessionStorage.removeItem('userRole');
+            sessionStorage.removeItem('assignedTenants');
+            sessionStorage.removeItem('selectedTenantIds');
+            
+            // Sign out from Supabase
+            const { error } = await supabase.auth.signOut();
+            
+            if (error) {
+                console.error('Error signing out:', error);
+            }
+            
+            // Route to login page
+            router.push('/');
+        } catch (error) {
+            console.error('Error during logout:', error);
+        }
+    };
 
     function menuClose() {
         const theme = variable;
@@ -250,49 +293,20 @@ const Header: React.FC<HeaderProps> = () => {
     const handleClose = () => setShow(false);
     const handleShow = () => setShow(true);
 
-    // Tenant Switcher (global)
-    const [assignedTenants, setAssignedTenants] = useState<{ id: string; name: string }[]>([]);
-    const [selectedTenantIds, setSelectedTenantIds] = useState<string | string[]>("all");
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            const tenantsRaw = localStorage.getItem('assignedTenants');
-            const selectedRaw = localStorage.getItem('selectedTenantIds');
-            if (tenantsRaw) setAssignedTenants(JSON.parse(tenantsRaw));
-            if (selectedRaw) setSelectedTenantIds(JSON.parse(selectedRaw));
-        } catch (_) { }
-    }, []);
+    // Tenant Switcher (global) - now using context
+    const tenantOptions = useMemo(() => {
+        if (tenantLoading) {
+            return [{ id: 'all', name: 'Loading tenants...' }];
+        }
+        return [{ id: 'all', name: 'All tenants' }, ...assignedTenants];
+    }, [assignedTenants, tenantLoading]);
+    
     const onTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
         const next = value === 'all' ? 'all' : value;
         setSelectedTenantIds(next);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('selectedTenantIds', JSON.stringify(next));
-            try {
-                window.dispatchEvent(new CustomEvent('tenantSelectionChanged', { detail: next }));
-            } catch { }
-        }
     };
-    const tenantOptions = useMemo(() => [{ id: 'all', name: 'All tenants' }, ...assignedTenants], [assignedTenants]);
 
-    // Date Range Picker (global)
-    const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
-        const today = new Date();
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
-        return [sevenDaysAgo, today];
-    });
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            const dateRangeRaw = localStorage.getItem('dateRange');
-            if (dateRangeRaw) {
-                const parsed = JSON.parse(dateRangeRaw);
-                setDateRange([new Date(parsed[0]), new Date(parsed[1])]);
-            }
-        } catch (_) { }
-    }, []);
 
     const onDateRangeChange = (dates: [Date | null, Date | null] | null) => {
         console.log('onDateRangeChange called with:', dates);
@@ -301,25 +315,10 @@ const Header: React.FC<HeaderProps> = () => {
             if (start && end) {
                 console.log('Both dates selected:', start, end);
                 setDateRange([start, end]);
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('dateRange', JSON.stringify([start.toISOString(), end.toISOString()]));
-                    try {
-                        window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start, end } }));
-                    } catch { }
-                }
             } else if (start && !end) {
-                // First date selected, keep current end date but dispatch event
+                // First date selected, keep current end date
                 console.log('First date selected:', start);
-                setDateRange(prev => {
-                    const newRange = [start, prev[1]] as [Date, Date];
-                    if (typeof window !== 'undefined') {
-                        localStorage.setItem('dateRange', JSON.stringify([start.toISOString(), prev[1].toISOString()]));
-                        try {
-                            window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start, end: prev[1] } }));
-                        } catch { }
-                    }
-                    return newRange;
-                });
+                setDateRange([start, dateRange[1]]);
             }
         } else {
             console.log('Invalid dates received:', dates);
@@ -377,7 +376,7 @@ const Header: React.FC<HeaderProps> = () => {
 
                         {/* Tenant Switcher (replaces search) */}
                         <div className="header-element d-md-block d-none my-auto" style={{ minWidth: 220 }}>
-                            <Form.Select size="sm" value={typeof selectedTenantIds === 'string' ? selectedTenantIds : 'all'} onChange={onTenantChange}>
+                            <Form.Select size="sm" value={typeof selectedTenantIds === 'string' ? selectedTenantIds : 'all'} onChange={onTenantChange} disabled={tenantLoading}>
                                 {tenantOptions.map((t) => (
                                     <option key={t.id} value={t.id}>{t.name}</option>
                                 ))}
@@ -395,7 +394,7 @@ const Header: React.FC<HeaderProps> = () => {
                                             const newRange = [date, dateRange[1]] as [Date, Date];
                                             setDateRange(newRange);
                                             if (typeof window !== 'undefined') {
-                                                localStorage.setItem('dateRange', JSON.stringify([date.toISOString(), dateRange[1].toISOString()]));
+                                                sessionStorage.setItem('dateRange', JSON.stringify([date.toISOString(), dateRange[1].toISOString()]));
                                                 try {
                                                     window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: date, end: dateRange[1] } }));
                                                 } catch { }
@@ -414,7 +413,7 @@ const Header: React.FC<HeaderProps> = () => {
                                             const newRange = [dateRange[0], date] as [Date, Date];
                                             setDateRange(newRange);
                                             if (typeof window !== 'undefined') {
-                                                localStorage.setItem('dateRange', JSON.stringify([dateRange[0].toISOString(), date.toISOString()]));
+                                                sessionStorage.setItem('dateRange', JSON.stringify([dateRange[0].toISOString(), date.toISOString()]));
                                                 try {
                                                     window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: dateRange[0], end: date } }));
                                                 } catch { }
@@ -558,24 +557,37 @@ const Header: React.FC<HeaderProps> = () => {
                         {/*<!-- End::header-element -->*/}
 
                         {/*<!-- Start::header-element -->*/}
-                        <SpkDropdown Customclass="header-element" toggleas="a" Navigate='#!' Customtoggleclass='header-link no-caret' Id="mainHeaderProfile" Imagetag={true}
-                            Imageclass='avatar custom-header-avatar avatar-rounded' Imagename='' Imagesrc={`${process.env.NODE_ENV === 'production' ? basePath : ''}/assets/images/faces/15.jpg`}
-                            Menuclass='main-header-dropdown dropdown-menu pt-0 overflow-hidden header-profile-dropdown dropdown-menu-end' Menulabel='mainHeaderProfile'>
-                            <li>
-                                <Link href='#!' scroll={false} className="dropdown-item  text-center border-bottom">
-                                    <span className="fw-medium">
-                                        Mr.Jack Miller
-                                    </span>
-                                    <span className="d-block fs-12 text-muted">Designer</span>
-                                </Link>
-                            </li>
-                            <li><Link scroll={false} className="dropdown-item d-flex align-items-center" href='/pages/profile/'><i className="ri-user-line lh-1 p-1 rounded-circle bg-primary-transparent text-primary me-2 fs-14"></i>Profile</Link></li>
-                            <li><Link scroll={false} className="dropdown-item d-flex align-items-center" href='/pages/file-manager/'><i className="ri-folder-4-line lh-1 p-1 rounded-circle bg-primary-transparent text-primary me-2 fs-14"></i>File Manager<span className="badge bg-success text-fixed-white ms-auto fs-9">2</span></Link></li>
-                            <li><Link scroll={false} className="dropdown-item d-flex align-items-center" href='/pages/email/mail-app/'><i className="ri-mail-line lh-1 p-1 rounded-circle bg-primary-transparent text-primary me-2 fs-14"></i>Mail Inbox</Link></li>
-                            <li><Link scroll={false} className="dropdown-item d-flex align-items-center" href='/pages/email/mail-settings/'><i className="ri-settings-5-line lh-1 p-1 rounded-circle bg-primary-transparent text-primary me-2 fs-14"></i>Settings</Link></li>
-                            <li><Link scroll={false} className="dropdown-item d-flex align-items-center" href='/authentication/sign-in/sign-in-cover/'><i className="ri-door-lock-line lh-1 p-1 rounded-circle bg-primary-transparent text-primary me-2 fs-14"></i>Log Out</Link></li>
-                        </SpkDropdown>
-
+                        <li className="header-element">
+                            {/* User Info Display */}
+                            {isLoadingUser ? (
+                                <div className="d-flex align-items-center">
+                                    <div className="spinner-border spinner-border-sm me-2" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span className="text-muted">Loading...</span>
+                                </div>
+                            ) : userData ? (
+                                <div className="d-flex align-items-center">
+                                    <div className="d-flex flex-column align-items-end me-3">
+                                        <span className="fw-medium text-dark">{userData.username}</span>
+                                        <span className="fs-12 text-muted">{userData.role}</span>
+                                    </div>
+                                    {/* Logout Button */}
+                                    <SpkButton 
+                                        Buttonvariant="outline-danger" 
+                                        Size="sm" 
+                                        onClickfunc={handleLogout}
+                                    >
+                                        <i className="ri-logout-box-line me-1"></i>
+                                        Logout
+                                    </SpkButton>
+                                </div>
+                            ) : (
+                                <div className="d-flex align-items-center">
+                                    <span className="text-muted">Not logged in</span>
+                                </div>
+                            )}
+                        </li>
                         {/*<!-- End::header-element -->*/}
 
                         {/*<!-- Start::header-element -->*/}

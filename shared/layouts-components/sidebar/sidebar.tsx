@@ -10,10 +10,13 @@ import { usePathname } from 'next/navigation';
 import nextConfig from "@/next.config"
 import Image from 'next/image';
 import SpkTooltips from '@/shared/@spk-reusable-components/reusable-uiElements/spk-tooltips';
+import { filterMenuItemsByRole } from './menuUtils';
+import { useUserContext } from '@/shared/contextapi/UserContext';
 
 const Sidebar = () => {
 
 	const { basePath } = nextConfig
+	const { userData } = useUserContext();
 
 	let [variable, setVariable] = useState(getState());
 	const local_varaiable = variable;
@@ -28,6 +31,16 @@ const Sidebar = () => {
 
 	const [menuitems, setMenuitems] = useState(MENUITEMS);
 
+	// Filter menu items based on user role and update state
+	useEffect(() => {
+		if (userData?.role) {
+			const filtered = filterMenuItemsByRole(MENUITEMS, userData.role);
+			setMenuitems(filtered);
+		} else {
+			setMenuitems([]);
+		}
+	}, [userData?.role]);
+
 	function closeMenuFn() {
 		const closeMenudata = (items: Menuitemtype[]) => {
 			items?.forEach((item: Menuitemtype) => {
@@ -37,7 +50,7 @@ const Sidebar = () => {
 				}
 			});
 		}
-		closeMenudata(MENUITEMS);
+		closeMenudata(menuitems);
 		setMenuitems((arr) => [...arr]);
 	}
 
@@ -371,10 +384,10 @@ const Sidebar = () => {
 	let hasParent = false;
 	let hasParentLevel = 0;
 
-	function setSubmenu(event: MouseEvent, targetObject: Menuitemtype, MENUITEMS = menuitems) {
+	function setSubmenu(event: MouseEvent, targetObject: Menuitemtype, menuItems = menuitems) {
 		const theme = getState();
 		if (!event?.ctrlKey) {
-			for (const item of MENUITEMS) {
+			for (const item of menuItems) {
 				if (item === targetObject) {
 					item.active = true;
 					item.selected = true;
@@ -469,7 +482,7 @@ const Sidebar = () => {
 				}
 			});
 		};
-		setSubmenuRecursively(MENUITEMS);
+		setSubmenuRecursively(menuitems);
 	}
 	const [previousUrl, setPreviousUrl] = useState("/");
 
@@ -484,11 +497,11 @@ const Sidebar = () => {
 
 
 	//
-	function toggleSidemenu(event: MouseEvent, targetObject: Menuitemtype, MENUITEMS = menuitems) {
+	function toggleSidemenu(event: MouseEvent, targetObject: Menuitemtype, menuItems = menuitems) {
 		const theme = getState();
 		let element = event.target;
 		if ((theme.dataNavStyle != "icon-hover" && theme.dataNavStyle != "menu-hover") || (window.innerWidth < 992) || (theme.dataNavLayout != "horizontal") && (theme.toggled != "icon-hover-closed" && theme.toggled != "menu-hover-closed")) {
-			for (const item of MENUITEMS) {
+			for (const item of menuItems) {
 				if (item === targetObject) {
 					if (theme.dataVerticalStyle == "doublemenu" && item.active) { return; }
 					item.active = !item.active;
@@ -747,7 +760,7 @@ const Sidebar = () => {
 
 							{/* <!-- Start::slide --> */}
 
-							{MENUITEMS.map((list: Menuitemtype, index: number) => (
+							{menuitems.map((list: Menuitemtype, index: number) => (
 								<Fragment key={index}>
 									<li className={` ${list.menutitle ? "slide__category" : ""} ${list.type === 'link' ? 'slide' : ''} ${list.type === 'sub' ? 'slide has-sub' : ''} ${list.active ? 'open' : ''}  ${list?.selected ? 'active' : ''}  `}>
 										{list.menutitle ?
