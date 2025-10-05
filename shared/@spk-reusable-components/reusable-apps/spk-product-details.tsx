@@ -2,7 +2,7 @@
 import React, { Fragment } from 'react';
 import { Card, Col, Row } from 'react-bootstrap';
 import Image from 'next/image';
-import { ReviewsType } from '@/shared/data/apps/ecommerce/productdetailsdata';
+import { ReviewsType } from '@/shared/data/apps/executive/productdetailsdata';
 import Link from 'next/link';
 
 interface SpkProductsProps {

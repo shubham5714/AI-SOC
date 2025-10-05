@@ -25,12 +25,12 @@ const SpkProducts: React.FC<SpkProductsProps> = ({ onclick, cartClick, detailsCl
           <div className="card-img-top border-bottom border-block-end-dashed">
             <div className="btns-container-1 align-items-center gap-1 custom-product-swiper">
               <SpkTooltips placement="top" title="Quick View">
-                <Link scroll={false} onClick={detailsClick} href="/apps/ecommerce/product-details/" className="btn btn-icon btn-info rounded-circle">
+                <Link scroll={false} onClick={detailsClick} href="/apps/executive/product-details/" className="btn btn-icon btn-info rounded-circle">
                   <i className="ri-eye-line"></i>
                 </Link>
               </SpkTooltips>
               <SpkTooltips placement="top" title="Add to Wishlist">
-                <Link href="/apps/ecommerce/wishlist" onClick={onclick} className="btn btn-icon btn-success rounded-circle">
+                <Link href="/apps/executive/wishlist" onClick={onclick} className="btn btn-icon btn-success rounded-circle">
                   <i className="bx bx-heart align-center"></i>
                 </Link>
               </SpkTooltips>
@@ -44,7 +44,7 @@ const SpkProducts: React.FC<SpkProductsProps> = ({ onclick, cartClick, detailsCl
             </div>
           </div>
           <div className="p-3 custom-product-swiper">
-            <h6 className="mb-1 fw-medium fs-16"><Link scroll href="/apps/ecommerce/product-details/">{card.name}</Link></h6>
+            <h6 className="mb-1 fw-medium fs-16"><Link scroll href="/apps/executive/product-details/">{card.name}</Link></h6>
             <div className="d-flex align-items-end justify-content-between flex-wrap">
               <div className="flex-grow-1">
                 <div className="d-flex align-items-baseline fs-11">
@@ -67,7 +67,7 @@ const SpkProducts: React.FC<SpkProductsProps> = ({ onclick, cartClick, detailsCl
               </div>
             </div>
             <div className="d-grid mt-3">
-              <Link href="/apps/ecommerce/cart" onClick={cartClick} className="btn btn-primary">
+              <Link href="/apps/executive/cart" onClick={cartClick} className="btn btn-primary">
                 Add to cart
               </Link>
 

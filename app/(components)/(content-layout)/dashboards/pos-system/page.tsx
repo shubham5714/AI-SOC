@@ -206,7 +206,7 @@ const PosSystem: React.FC<PosSystemProps> = () => {
                                 </div>
                                 <div className="d-flex gap-3 mt-4">
                                     <Link scroll={false} href="#!" className="btn btn-success-light btn-wave flex-fill waves-effect waves-light">Save For Later</Link>
-                                    <Link scroll={false} href="/apps/ecommerce/checkout/" className="btn btn-primary btn-wave flex-fill waves-effect waves-light">Pay Now</Link>
+                                    <Link scroll={false} href="/apps/executive/checkout/" className="btn btn-primary btn-wave flex-fill waves-effect waves-light">Pay Now</Link>
                                 </div>
                             </div>
                         </Card.Body>

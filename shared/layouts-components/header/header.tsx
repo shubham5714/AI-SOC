@@ -556,39 +556,6 @@ const Header: React.FC<HeaderProps> = () => {
                         </li>
                         {/*<!-- End::header-element -->*/}
 
-                        {/*<!-- Start::header-element -->*/}
-                        <li className="header-element">
-                            {/* User Info Display */}
-                            {isLoadingUser ? (
-                                <div className="d-flex align-items-center">
-                                    <div className="spinner-border spinner-border-sm me-2" role="status">
-                                        <span className="visually-hidden">Loading...</span>
-                                    </div>
-                                    <span className="text-muted">Loading...</span>
-                                </div>
-                            ) : userData ? (
-                                <div className="d-flex align-items-center">
-                                    <div className="d-flex flex-column align-items-end me-3">
-                                        <span className="fw-medium text-dark">{userData.username}</span>
-                                        <span className="fs-12 text-muted">{userData.role}</span>
-                                    </div>
-                                    {/* Logout Button */}
-                                    <SpkButton 
-                                        Buttonvariant="outline-danger" 
-                                        Size="sm" 
-                                        onClickfunc={handleLogout}
-                                    >
-                                        <i className="ri-logout-box-line me-1"></i>
-                                        Logout
-                                    </SpkButton>
-                                </div>
-                            ) : (
-                                <div className="d-flex align-items-center">
-                                    <span className="text-muted">Not logged in</span>
-                                </div>
-                            )}
-                        </li>
-                        {/*<!-- End::header-element -->*/}
 
                         {/*<!-- Start::header-element -->*/}
                         <li className="header-element">

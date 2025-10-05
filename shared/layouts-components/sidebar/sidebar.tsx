@@ -10,13 +10,44 @@ import { usePathname } from 'next/navigation';
 import nextConfig from "@/next.config"
 import Image from 'next/image';
 import SpkTooltips from '@/shared/@spk-reusable-components/reusable-uiElements/spk-tooltips';
-import { filterMenuItemsByRole } from './menuUtils';
+import SpkButton from '@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons';
 import { useUserContext } from '@/shared/contextapi/UserContext';
+import { useTenantNavigation } from '@/shared/hooks/useTenantNavigation';
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
 const Sidebar = () => {
 
 	const { basePath } = nextConfig
-	const { userData } = useUserContext();
+	const { userData, isLoading: isLoadingUser } = useUserContext();
+	const router = useRouter();
+
+	// Supabase client for logout
+	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+	const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+	const supabase = createClient(supabaseUrl, supabaseKey);
+
+	// Logout function
+	const handleLogout = async () => {
+		try {
+			// Clear session storage
+			sessionStorage.removeItem('userRole');
+			sessionStorage.removeItem('assignedTenants');
+			sessionStorage.removeItem('selectedTenantIds');
+			
+			// Sign out from Supabase
+			const { error } = await supabase.auth.signOut();
+			
+			if (error) {
+				console.error('Error signing out:', error);
+			}
+			
+			// Route to login page
+			router.push('/');
+		} catch (error) {
+			console.error('Error during logout:', error);
+		}
+	};
 
 	let [variable, setVariable] = useState(getState());
 	const local_varaiable = variable;
@@ -29,17 +60,17 @@ const Sidebar = () => {
 	}, []);
 
 
-	const [menuitems, setMenuitems] = useState(MENUITEMS);
+	const [menuitems, setMenuitems] = useState<Menuitemtype[]>([]);
 
-	// Filter menu items based on user role and update state
+	// Use tenant-based navigation instead of role-based filtering
+	const { menuItems, isLoading } = useTenantNavigation();
+
+	// Update menu items when tenant navigation changes
 	useEffect(() => {
-		if (userData?.role) {
-			const filtered = filterMenuItemsByRole(MENUITEMS, userData.role);
-			setMenuitems(filtered);
-		} else {
-			setMenuitems([]);
+		if (!isLoading) {
+			setMenuitems(menuItems);
 		}
-	}, [userData?.role]);
+	}, [menuItems, isLoading]);
 
 	function closeMenuFn() {
 		const closeMenudata = (items: Menuitemtype[]) => {
@@ -731,7 +762,7 @@ const Sidebar = () => {
 			<div id="responsive-overlay" ref={overlayRef} onClick={() => { menuClose(); }}></div>
 			{/* <!-- Start::app-sidebar --> */}
 
-			<aside className="app-sidebar sticky" id="sidebar" onMouseOver={Onhover} onMouseLeave={Outhover} >
+			<aside className="app-sidebar sticky d-flex flex-column" id="sidebar" onMouseOver={Onhover} onMouseLeave={Outhover} >
 
 				{/* <!-- Start::main-sidebar-header --> */}
 
@@ -749,10 +780,19 @@ const Sidebar = () => {
 
 				{/* <!-- Start::main-sidebar --> */}
 
-				<SimpleBar className="main-sidebar" id="sidebar-scroll">
+				<SimpleBar className="main-sidebar d-flex flex-column flex-fill" id="sidebar-scroll">
 
-					{/* <!-- Start::nav --> */}
-					<nav className="main-menu-container nav nav-pills flex-column sub-open">
+					{/* Show loading state */}
+					{isLoading ? (
+						<div className="d-flex justify-content-center align-items-center h-100">
+							<div className="spinner-border text-primary" role="status">
+								<span className="visually-hidden">Loading navigation...</span>
+							</div>
+						</div>
+					) : (
+						<>
+							{/* <!-- Start::nav --> */}
+							<nav className="main-menu-container nav nav-pills flex-column sub-open flex-fill">
 						<div className="slide-left" id="slide-left" onClick={slideLeft} >
 							<svg xmlns="http://www.w3.org/2000/svg" fill="#7b8191" width="24" height="24" viewBox="0 0 24 24"> <path d="M13.293 6.293 7.586 12l5.707 5.707 1.414-1.414L10.414 12l4.293-4.293z"></path> </svg>
 						</div>
@@ -832,11 +872,51 @@ const Sidebar = () => {
 						</div>
 					</nav>
 
-					{/* <!-- End::nav --> */}
+							{/* <!-- End::nav --> */}
+						</>
+					)}
 
 				</SimpleBar>
 
 				{/* <!-- End::main-sidebar --> */}
+
+				{/* <!-- Start::User Info Section - Fixed at Bottom --> */}
+				<div className="sidebar-user-info border-top p-3">
+					{isLoadingUser ? (
+						<div className="d-flex align-items-center justify-content-center">
+							<div className="spinner-border spinner-border-sm me-2" role="status">
+								<span className="visually-hidden">Loading...</span>
+							</div>
+							<span className="text-muted">Loading...</span>
+						</div>
+					) : userData ? (
+						<div className="d-flex flex-column">
+							<div className="d-flex align-items-center mb-2">
+								<div className="avatar avatar-md bg-primary-transparent avatar-rounded me-2">
+									<i className="ri-user-line fs-16"></i>
+								</div>
+								<div className="flex-fill">
+									<div className="fw-medium text-dark fs-14">{userData.username}</div>
+									<div className="text-muted fs-12">{userData.role}</div>
+								</div>
+							</div>
+							<SpkButton 
+								Buttonvariant="outline-danger" 
+								Size="sm" 
+								onClickfunc={handleLogout}
+								Customclass="w-100"
+							>
+								<i className="ri-logout-box-line me-1"></i>
+								Logout
+							</SpkButton>
+						</div>
+					) : (
+						<div className="text-center">
+							<span className="text-muted fs-12">Not logged in</span>
+						</div>
+					)}
+				</div>
+				{/* <!-- End::User Info Section --> */}
 
 			</aside>
 

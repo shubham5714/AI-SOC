@@ -164,7 +164,7 @@ const Page = () => {
                 });
                 
                 setTimeout(() => {
-                    router.push("/dashboards/ecommerce");
+                    router.push("/dashboards/executive");
                 }, 1200);
                 return;
             }
@@ -296,7 +296,7 @@ const Page = () => {
                 // Show loading spinner while contexts are being processed
                 setIsProcessingLogin(true);
                 setTimeout(() => {
-                    router.push("/dashboards/ecommerce");
+                    router.push("/dashboards/executive");
                 }, 1200);
         } catch (err: any) {
             setError(err.message || 'Login failed');
@@ -474,7 +474,7 @@ const Page = () => {
             });
             
             setTimeout(() => {
-                router.push("/dashboards/ecommerce");
+                router.push("/dashboards/executive");
             }, 1200);
         } catch (error: any) {
             console.error('Error verifying MFA enrollment:', error);
