@@ -1,6 +1,6 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 interface UserData {
@@ -25,11 +25,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
-
-  // Initialize Supabase client
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Load user data and validate authentication on mount
   useEffect(() => {

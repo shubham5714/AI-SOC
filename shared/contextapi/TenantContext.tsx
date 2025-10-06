@@ -1,6 +1,6 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 
 interface Tenant {
   id: string;
@@ -25,11 +25,6 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [assignedTenants, setAssignedTenants] = useState<Tenant[]>([]);
   const [selectedTenantIds, setSelectedTenantIdsState] = useState<string | string[]>('all');
   const [isLoading, setIsLoading] = useState(true);
-
-  // Initialize Supabase client
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Load tenant data and validate authentication on mount
   useEffect(() => {

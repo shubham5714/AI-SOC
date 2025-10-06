@@ -12,7 +12,7 @@ import Link from "next/link";
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Col, Dropdown, Form, ListGroup, ProgressBar, Row } from "react-bootstrap";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/shared/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
 import { useUserContext } from "@/shared/contextapi/UserContext";
@@ -45,11 +45,6 @@ const SalesInner: React.FC = () => {
             searchTerm: ''
         };
     });
-    
-    // Supabase client
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
 
     // Fetch total alerts count from tickets respecting tenant selection and date range
     const { data: totalAlertsCount } = useQuery({

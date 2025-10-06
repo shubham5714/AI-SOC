@@ -13,7 +13,7 @@ import SpkTooltips from '@/shared/@spk-reusable-components/reusable-uiElements/s
 import SpkButton from '@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons';
 import { useUserContext } from '@/shared/contextapi/UserContext';
 import { useTenantNavigation } from '@/shared/hooks/useTenantNavigation';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 const Sidebar = () => {
@@ -21,11 +21,6 @@ const Sidebar = () => {
 	const { basePath } = nextConfig
 	const { userData, isLoading: isLoadingUser } = useUserContext();
 	const router = useRouter();
-
-	// Supabase client for logout
-	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-	const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-	const supabase = createClient(supabaseUrl, supabaseKey);
 
 	// Logout function
 	const handleLogout = async () => {

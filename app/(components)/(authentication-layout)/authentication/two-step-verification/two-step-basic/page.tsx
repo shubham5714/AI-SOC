@@ -1,7 +1,7 @@
 "use client"
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
 import SpkAlert from '@/shared/@spk-reusable-components/reusable-uiElements/spk-alerts';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,9 +32,6 @@ const Basic: React.FC<BasicProps> = () => {
         six: useRef<HTMLInputElement | null>(null),
     };
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-    const supabase = createClient(supabaseUrl, supabaseKey);
     const router = useRouter();
 
     useEffect(() => {

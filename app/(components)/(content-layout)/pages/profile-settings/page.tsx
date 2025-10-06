@@ -8,7 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import React, { Fragment, useState, useEffect, useMemo } from "react";
 import { Col, Form, Nav, Tab, Card, Alert } from "react-bootstrap";
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import { toast } from 'react-toastify';
 
 interface ProfileSettingsProps { }
@@ -32,11 +32,6 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
         isVerifying: false
     });
     const [verificationCode, setVerificationCode] = useState('');
-    
-    // Supabase client
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-    const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
 
     const toggle = (toggleKey: string) => {
         setToggles((prevState) => ({

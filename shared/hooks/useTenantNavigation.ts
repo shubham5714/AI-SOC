@@ -1,14 +1,9 @@
 "use client"
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import { Menuitemtype, MENUITEMS } from '@/shared/layouts-components/sidebar/nav';
 import { useTenantContext } from '@/shared/contextapi/TenantContext';
 import { useUserContext } from '@/shared/contextapi/UserContext';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface TenantNavData {
   menu_item: string;

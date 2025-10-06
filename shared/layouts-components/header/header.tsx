@@ -12,7 +12,7 @@ import Image from 'next/image';
 import nextConfig from "@/next.config"
 import { ThemeChanger } from '@/shared/redux/actions';
 import DatePicker from "react-datepicker";
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/shared/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useTenantContext } from '@/shared/contextapi/TenantContext';
 import { useUserContext } from '@/shared/contextapi/UserContext';
@@ -23,11 +23,6 @@ interface HeaderProps { }
 const Header: React.FC<HeaderProps> = () => {
 
     const { basePath } = nextConfig
-
-    // Supabase client for logout
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-    const supabase = createClient(supabaseUrl, supabaseKey);
     const router = useRouter();
 
     // Use tenant context
