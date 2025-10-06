@@ -2,17 +2,17 @@ import { ReactNode } from "react";
 
 // Order Status
 export const OrderStatusSeries = [{
-    name: "Paid",
+    name: "Alerts",
     type: "column",
     data: [33, 21, 32, 37, 23, 32, 47, 31, 54, 32, 20, 38]
 }, {
-    name: "Unpaid",
-    type: "area",
-    data: [44, 55, 41, 42, 22, 43, 21, 35, 56, 27, 43, 27]
-}, {
-    name: "Refunded",
+    name: "True Positives",
     type: "line",
-    data: [30, 25, 36, 30, 45, 35, 64, 51, 59, 36, 39, 51]
+    data: [1, 0, 1, 2, 1, 0, 0, 1, 1, 2, 3, 1]
+}, {
+    name: "False Positive",
+    type: "line",
+    data: [32, 21, 30, 36, 23, 32, 46, 30, 52, 29, 20, 38]
 }]
 export const OrderStatusOptions = {
     chart: {
@@ -24,8 +24,8 @@ export const OrderStatusOptions = {
         }
     },
     stroke: {
-        width: [0, 0, 2],
-        dashArray: [0, 0, 4],
+        width: [0, 2, 2],
+        dashArray: [0, 4, 4],
         show: true,
         curve: 'smooth',
         lineCap: 'butt',
@@ -60,7 +60,7 @@ export const OrderStatusOptions = {
     markers: {
         size: 0
     },
-    colors: ['var(--primary-color)', "rgba(244, 110, 244, 0.05)", 'rgb(133, 204, 65)'],
+    colors: ['var(--primary-color)', "rgba(244, 110, 244, 1)", 'rgb(133, 204, 65)'],
     tooltip: {
         theme: "dark",
     },

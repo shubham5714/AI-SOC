@@ -511,9 +511,7 @@ const Page = () => {
                 </div>
             )}
             
-            <html>
-                <body>
-                    <div className="container">
+            <div className="container">
                         <div className="row justify-content-center align-items-center authentication authentication-basic h-100 pt-3">
                             <Col xxl={4} xl={4} lg={4} md={6} sm={8} className="col-12">
                                 <Card className="custom-card my-4">
@@ -719,8 +717,6 @@ const Page = () => {
                             </Col>
                         </div>
                     </div>
-                </body>
-            </html>
         </Fragment>
     )
 }

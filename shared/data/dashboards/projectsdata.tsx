@@ -118,9 +118,9 @@ export const ProjectStatisticsOptions = {
 }
 
 // Tasks Activity
-export const TasksActivitySeries = [1754, 634, 878, 470]
+export const TasksActivitySeries = [5, 4, 5, 1]
 export const TasksActivityOptions = {
-    labels: ["On Going", "Completed", "To do", "Pending"],
+    labels: ["Critical", "High", "Medium", "Low"],
     chart: {
         height: 208,
         type: 'donut',
@@ -331,8 +331,8 @@ interface TaskActivityType {
 }
 
 export const TaskActivityType: TaskActivityType[] = [
-    { id: 1, type: 'ongoing', name: 'On Going Tasks', change: "1.67%", totalTasks: "1,754", changeType: 'Increased', },
-    { id: 2, type: 'completed', name: 'Completed Tasks', change: "0.46%", totalTasks: "634", changeType: 'Increased', },
-    { id: 3, type: 'todo', name: 'To Do Tasks', change: "3.43%", totalTasks: "878", changeType: 'Decreased', },
-    { id: 4, type: 'pending', name: 'Pending Tasks', change: "0.13%", totalTasks: "470", changeType: 'Increased', },
+    { id: 1, type: 'critical', name: 'Critical', change: "", totalTasks: "5", changeType: '', },
+    { id: 2, type: 'high', name: 'High', change: "", totalTasks: "4", changeType: '', },
+    { id: 3, type: 'medium', name: 'Medium', change: "", totalTasks: "5", changeType: '', },
+    { id: 4, type: 'low', name: 'Low', change: "", totalTasks: "1", changeType: '', },
 ];

@@ -3,8 +3,8 @@
 
 export const Funnelseries = [
   {
-    name: "Funnel Series",
-    data: [1380, 1100, 990, 880, 740, 548, 330, 200],
+    name: "Count",
+    data: [100, 70, 40],
 
   },
 ]
@@ -12,41 +12,55 @@ export const Funneloptions = {
   chart: {
     type: 'bar',
     height: 350,
-
+    toolbar: {
+      show: false
+    },
   },
   plotOptions: {
     bar: {
       borderRadius: 0,
       horizontal: true,
-      barHeight: '80%',
+      barHeight: '60%',
       isFunnel: true,
+      distributed: false,
+    },
+  },
+  grid: {
+    padding: {
+      top: 0,
+      right: 0,
+      bottom: 60,
+      left: 0,
     },
   },
   dataLabels: {
     enabled: true,
     formatter: function (val: string, opt: { w: { globals: { labels: { [x: string]: string; }; }; }; dataPointIndex: string | number; }) {
-      return opt.w.globals.labels[opt.dataPointIndex] + ':  ' + val;
+      // Use actual data values for display - update these with your real data
+      const actualValues = [100000000, 70, 0]; // Replace with your actual data: [Events, Alerts, Incidents]
+      return opt.w.globals.labels[opt.dataPointIndex] + ': ' + actualValues[opt.dataPointIndex as number].toLocaleString();
+    },
+    style: {
+      colors: ['#ffffff'],
+      fontSize: '13px',
+      fontWeight: '400',
+      fontFamily: 'inherit',
     },
     dropShadow: {
-      enabled: true,
+      enabled: false,
     },
   },
   title: {
-    text: 'Recruitment Funnel',
+    text: '',
     align: 'middle',
 
   },
 
   xaxis: {
     categories: [
-      'Sourced',
-      'Screened',
-      'Assessed',
-      'HR Interview',
-      'Technical',
-      'Verify',
-      'Offered',
-      'Hired',
+      'Events',
+      'Alerts',
+      'Incidents',
     ],
 
   },
@@ -54,6 +68,8 @@ export const Funneloptions = {
     show: false,
   },
   colors: [
+    '#5c67f7',
+    '#5c67f7',
     '#5c67f7',
   ],
 }
@@ -88,7 +104,7 @@ export const Pyramidoptions = {
   ],
   dataLabels: {
     enabled: true,
-    formatter: function (val: string, opt: number[]) {
+    formatter: function (val: string, opt: { w: { globals: { labels: { [x: string]: string; }; }; }; dataPointIndex: string | number; }) {
       return opt.w.globals.labels[opt.dataPointIndex];
     },
     dropShadow: {

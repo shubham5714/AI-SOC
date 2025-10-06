@@ -87,13 +87,8 @@ const Executive: React.FC<ExecutiveProps> = () => {
                     <Row>
                         <Col xl={6}>
                             <Card className="custom-card">
-                                <Card.Header className="justify-content-between">
+                                <Card.Header>
                                     <Card.Title>Alert Trend</Card.Title>
-                                    <div className="d-flex gap-2">
-                                        <div className="btn btn-sm btn-outline-light">Today</div>
-                                        <div className="btn btn-sm btn-outline-light">Weakly</div>
-                                        <div className="btn btn-sm btn-light">Yearly</div>
-                                    </div>
                                 </Card.Header>
                                 <Card.Body className="pb-2">
                                     <div id="order-status">
@@ -117,7 +112,9 @@ const Executive: React.FC<ExecutiveProps> = () => {
                                                 <div className="d-flex align-items-start justify-content-between">
                                                     <div className={`task-activity-type lh-1 ${idx.type}`}>
                                                         <div className="fw-medium mb-1">{idx.name}</div>
-                                                        <span className="fs-12 text-muted">{idx.changeType} By<span className={`text-${idx.changeType === 'Increased' ? 'success' : 'danger'} fs-12 ms-1 fw-medium d-inline-block`}>{idx.change}</span></span>
+                                                        {idx.changeType && idx.change && (
+                                                            <span className="fs-12 text-muted">{idx.changeType} By<span className={`text-${idx.changeType === 'Increased' ? 'success' : 'danger'} fs-12 ms-1 fw-medium d-inline-block`}>{idx.change}</span></span>
+                                                        )}
                                                     </div>
                                                     <div className="lh-1 text-end">
                                                         <span className="d-block fs-12 text-muted mb-1">Total</span>
