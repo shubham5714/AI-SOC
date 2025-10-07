@@ -291,8 +291,13 @@ const Page = () => {
                 
                 // Show loading spinner while contexts are being processed
                 setIsProcessingLogin(true);
+                
+                // Get redirected URL from query params or default to executive dashboard
                 setTimeout(() => {
-                    router.push("/dashboards/executive");
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const redirectedFrom = urlParams.get('redirectedFrom');
+                    const targetUrl = redirectedFrom || "/dashboards/executive";
+                    router.push(targetUrl);
                 }, 1200);
         } catch (err: any) {
             setError(err.message || 'Login failed');

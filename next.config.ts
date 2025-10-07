@@ -3,7 +3,7 @@ import path from 'path';
 const isProd = process.env.NODE_ENV === "production";
 const nextConfig: NextConfig = {
   /* config options here */
-  output: "export",  // Uncomment the following line only for building purposes. By default, this line should remain commented out.
+  // output: "export",  // ← COMMENTED OUT - This prevents middleware from working!
   trailingSlash: true,
   // basePath: isProd ? "/bootstrap/app-router/zeno-ts/preview" : undefined,
 	// assetPrefix : isProd ? "/bootstrap/app-router/zeno-ts/preview" : undefined,

@@ -1,7 +1,6 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/shared/lib/supabase';
-import { useRouter } from 'next/navigation';
 
 interface UserData {
   username: string;
@@ -24,7 +23,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const router = useRouter();
 
   // Load user data and validate authentication on mount
   useEffect(() => {
@@ -38,11 +36,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
           setUserData(null);
           setIsAuthenticated(false);
           setIsLoading(false);
-          
-          // Only redirect if we're not on the login page
-          if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-            router.push('/');
-          }
           return;
         }
 
