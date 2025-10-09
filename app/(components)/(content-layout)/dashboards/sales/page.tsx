@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
 import { useUserContext } from "@/shared/contextapi/UserContext";
 import { useDateRangeContext } from "@/shared/contextapi/DateRangeContext";
+import RouteProtection from "@/shared/components/RouteProtection";
 
 interface SalesProps { }
 
@@ -171,24 +172,24 @@ const SalesInner: React.FC = () => {
     );
 
     return (
-
-        <Fragment>
-            <Seo title="Dashboard" />
-            {/*<!-- Start::page-header -->*/}
-            <div className="d-flex align-items-center justify-content-between my-4 page-header-breadcrumb flex-wrap gap-2">
-                <div>
-                    <p className="fw-medium fs-20 mb-0">
-                        Hey, {userData?.username || 'User'} &#128075;
-                    </p>
-                    <p className="fs-13 text-muted mb-0">Manage alerts with AI Insights.</p>
-                </div>
-                <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <div className="d-flex align-items-center gap-2">
-                        <SpkButton Buttonvariant="primary" Customclass="btn btn-wave border-0"> <i className="ri-filter-3-fill me-2 lh-1 align-middle"></i>Filter </SpkButton>
+        <RouteProtection>
+            <Fragment>
+                <Seo title="Dashboard" />
+                {/*<!-- Start::page-header -->*/}
+                <div className="d-flex align-items-center justify-content-between my-4 page-header-breadcrumb flex-wrap gap-2">
+                    <div>
+                        <p className="fw-medium fs-20 mb-0">
+                            Hey, {userData?.username || 'User'} &#128075;
+                        </p>
+                        <p className="fs-13 text-muted mb-0">Manage alerts with AI Insights.</p>
+                    </div>
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <div className="d-flex align-items-center gap-2">
+                            <SpkButton Buttonvariant="primary" Customclass="btn btn-wave border-0"> <i className="ri-filter-3-fill me-2 lh-1 align-middle"></i>Filter </SpkButton>
+                        </div>
                     </div>
                 </div>
-            </div>
-            {/*<!-- End::page-header -->*/}
+                {/*<!-- End::page-header -->*/}
 
             {/*<!-- Start:: row-1 -->*/}
             <Row>
@@ -533,7 +534,8 @@ const SalesInner: React.FC = () => {
                 </Col>
             </Row>
             {/*<!-- End:: row-1 -->*/}
-        </Fragment>
+            </Fragment>
+        </RouteProtection>
     )
 };
 

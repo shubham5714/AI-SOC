@@ -12,6 +12,7 @@ import { supabase } from "@/shared/lib/supabase";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
 import { useDateRangeContext } from "@/shared/contextapi/DateRangeContext";
 import Image from "next/image";
+import Link from "next/link";
 import React, { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import { Card, Col, Dropdown, Form, Modal, Row, Button, Spinner, Pagination, InputGroup } from "react-bootstrap";
 
@@ -940,7 +941,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                 {(visibleColumns || []).map((col) => (
                                                     <td key={col.key}>
                                                         {col.key === 'id' && (
-                                                            <span className="fw-medium">{ticket.id}</span>
+                                                            <Link 
+                                                                href={`/tickets/details?id=${ticket.id}`}
+                                                                className="fw-medium text-primary text-decoration-none"
+                                                                style={{ cursor: 'pointer' }}
+                                                            >
+                                                                {ticket.id}
+                                                            </Link>
                                                         )}
                                                         {col.key === 'title' && (
                                                             <span className="fw-medium">{ticket.title}</span>

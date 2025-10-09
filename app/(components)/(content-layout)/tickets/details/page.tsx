@@ -1,4 +1,10 @@
 "use client"
+// Ticket Details Page - Ready for ticket data integration
+// To integrate with ticket data:
+// 1. Add ticket ID parameter handling (useSearchParams)
+// 2. Add ticket data fetching logic (Supabase query)
+// 3. Replace hardcoded values with dynamic ticket data
+// 4. Add loading and error states
 import SpkTables from "@/shared/@spk-reusable-components/reusable-tables/spk-tables";
 import SpkBadge from "@/shared/@spk-reusable-components/reusable-uiElements/spk-badge";
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
