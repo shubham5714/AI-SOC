@@ -81,9 +81,13 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     const [formData, setFormData] = useState<{ [key: string]: any }>({});
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
     const [isTesting, setIsTesting] = useState(false);
+    const [testingInstanceId, setTestingInstanceId] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [checkboxStates, setCheckboxStates] = useState<{ [key: number]: boolean }>({});
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [modalMessage, setModalMessage] = useState('');
 
     // Fetch integration instances from Supabase
     const fetchIntegrationInstances = async () => {
@@ -240,7 +244,10 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     const handleEditInstance = (instance: IntegrationInstance, integration: IntegrationType) => {
         setSelectedInstance(instance);
         setSelectedIntegration(integration);
-        setFormData(instance.configuration);
+        setFormData({
+            ...instance.configuration,
+            instance_name: instance.instance_name
+        });
         setFormErrors({});
         setShowEditInstanceModal(true);
     };
@@ -261,7 +268,9 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     // Handle add instance button click
     const handleAddInstance = (integration: IntegrationType) => {
         setSelectedIntegration(integration);
-        setFormData({});
+        setFormData({
+            instance_name: `${integration.name} Instance`
+        });
         setFormErrors({});
         setShowAddInstanceModal(true);
     };
@@ -289,6 +298,11 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
 
         const errors: { [key: string]: string } = {};
         
+        // Validate instance name
+        if (!formData.instance_name || formData.instance_name.toString().trim() === '') {
+            errors.instance_name = 'Instance name is required';
+        }
+        
         selectedIntegration.parameters?.forEach(param => {
             if (param.required && (!formData[param.id] || formData[param.id].toString().trim() === '')) {
                 errors[param.id] = `${param.label} is required`;
@@ -299,7 +313,7 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
         return Object.keys(errors).length === 0;
     };
 
-    // Handle test connection
+    // Handle test connection (for form in modal)
     const handleTestConnection = async () => {
         if (!validateForm()) return;
 
@@ -309,11 +323,30 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
             await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
             
             // For now, just show success
-            alert('Connection test successful!');
+            setModalMessage('Connection test successful!');
+            setShowSuccessModal(true);
         } catch (error) {
-            alert('Connection test failed. Please check your parameters.');
+            setModalMessage('Connection test failed. Please check your parameters.');
+            setShowErrorModal(true);
         } finally {
             setIsTesting(false);
+        }
+    };
+
+    // Handle test connection for existing instance
+    const handleTestInstanceConnection = async (instance: IntegrationInstance) => {
+        setTestingInstanceId(instance.id);
+        try {
+            // TODO: Implement actual API call to test connection using instance.configuration
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+            
+            setModalMessage(`Connection test successful for ${instance.instance_name}!`);
+            setShowSuccessModal(true);
+        } catch (error) {
+            setModalMessage(`Connection test failed for ${instance.instance_name}. Please check your configuration.`);
+            setShowErrorModal(true);
+        } finally {
+            setTestingInstanceId(null);
         }
     };
 
@@ -321,22 +354,48 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     const handleSaveInstance = async () => {
         if (!validateForm() || !selectedIntegration) return;
 
+        // Get tenant_id from context
+        let tenantId: string | null = null;
+        if (assignedTenants && assignedTenants.length > 0) {
+            if (selectedTenantIds === 'all') {
+                // Use first tenant if 'all' is selected
+                tenantId = assignedTenants[0]?.id || null;
+            } else if (Array.isArray(selectedTenantIds) && selectedTenantIds.length > 0) {
+                // Use first selected tenant
+                tenantId = selectedTenantIds[0];
+            } else if (typeof selectedTenantIds === 'string') {
+                tenantId = selectedTenantIds;
+            }
+        }
+
+        if (!tenantId) {
+            setModalMessage('No tenant selected. Please select a tenant first.');
+            setShowErrorModal(true);
+            return;
+        }
+
         setIsSaving(true);
         try {
+            // Extract instance_name from formData and create configuration without it
+            const { instance_name, ...configuration } = formData;
+            
             // Save instance to Supabase
             const { data, error } = await supabase
                 .from('integration_instances')
                 .insert({
                     integration_id: selectedIntegration.id,
-                    tenant_id: 'default-tenant', // TODO: Get from context
-                    instance_name: `${selectedIntegration.name} Instance`,
-                    configuration: formData,
-                    status: 'active'
-                });
+                    tenant_id: tenantId,
+                    name: selectedIntegration.name,
+                    instance_name: instance_name?.toString().trim() || `${selectedIntegration.name} Instance`,
+                    configuration: configuration,
+                    status: 'pending'
+                })
+                .select();
 
             if (error) {
                 console.error('Error saving instance:', error);
-                alert('Failed to save integration instance. Please try again.');
+                setModalMessage(`Failed to save integration instance: ${error.message || 'Unknown error'}`);
+                setShowErrorModal(true);
                 return;
             }
 
@@ -352,14 +411,19 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 console.error('Error updating integration count:', updateError);
             }
 
-            // Refresh integrations list
+            // Refresh integrations and instances list
             await fetchIntegrations();
+            await fetchIntegrationInstances();
             
             setShowAddInstanceModal(false);
-            alert('Integration instance saved successfully!');
-        } catch (error) {
+            setFormData({});
+            setFormErrors({});
+            setModalMessage('Integration instance saved successfully!');
+            setShowSuccessModal(true);
+        } catch (error: any) {
             console.error('Error saving instance:', error);
-            alert('Failed to save integration instance. Please try again.');
+            setModalMessage(`Failed to save integration instance: ${error?.message || 'Unknown error'}`);
+            setShowErrorModal(true);
         } finally {
             setIsSaving(false);
         }
@@ -371,17 +435,22 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
 
         setIsUpdating(true);
         try {
+            // Extract instance_name from formData and create configuration without it
+            const { instance_name, ...configuration } = formData;
+            
             // Update instance in Supabase
             const { error } = await supabase
                 .from('integration_instances')
                 .update({
-                    configuration: formData
+                    instance_name: instance_name?.toString().trim() || selectedInstance.instance_name,
+                    configuration: configuration
                 })
                 .eq('id', selectedInstance.id);
 
             if (error) {
-                console.error('Supabase error updating instance:', error);
-                alert('Failed to update integration instance. Please try again.');
+                console.error('Error updating instance:', error);
+                setModalMessage(`Failed to update integration instance: ${error.message || 'Unknown error'}`);
+                setShowErrorModal(true);
                 return;
             }
 
@@ -389,10 +458,14 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
             await fetchIntegrationInstances();
             
             setShowEditInstanceModal(false);
-            alert('Integration instance updated successfully!');
-        } catch (error) {
+            setFormData({});
+            setFormErrors({});
+            setModalMessage('Integration instance updated successfully!');
+            setShowSuccessModal(true);
+        } catch (error: any) {
             console.error('Error updating instance:', error);
-            alert('Failed to update integration instance. Please try again.');
+            setModalMessage(`Failed to update integration instance: ${error?.message || 'Unknown error'}`);
+            setShowErrorModal(true);
         } finally {
             setIsUpdating(false);
         }
@@ -495,7 +568,7 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 {/* Header Section */}
                 <Row>
                     <Col xl={12}>
-                        <div className="d-flex justify-content-between align-items-center mb-4 pt-4">
+                        <div className="d-flex justify-content-between align-items-center" style={{ paddingTop: '0.75rem', paddingBottom: '0.75rem', marginBottom: 0 }}>
                             <h5 className="mb-0">Instances</h5>
                         </div>
                     </Col>
@@ -628,7 +701,7 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                                                                             <Row className="align-items-center">
                                                                                 <Col md={6}>
                                                                                     <div className="d-flex align-items-center">
-                                                                                        <h6 className="mb-0 me-3">{instance.instance_name}</h6>
+                                                                                        <h6 className="mb-0 me-3 instance-name-text">{instance.instance_name}</h6>
                         <span className={`badge ${instance.status === 'active' ? 'bg-success' : instance.status === 'inactive' ? 'bg-secondary' : 'bg-warning'}`}>
                             {instance.status}
                         </span>
@@ -644,6 +717,19 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                             disabled={instance.status === 'inactive' || instance.status === 'inprogress'}
                             className="me-3"
                         />
+                                                                                        <Button
+                                                                                            variant="outline-info"
+                                                                                            size="sm"
+                                                                                            onClick={() => handleTestInstanceConnection(instance)}
+                                                                                            disabled={testingInstanceId !== null}
+                                                                                            className="me-2"
+                                                                                        >
+                                                                                            {testingInstanceId === instance.id ? (
+                                                                                                <Spinner size="sm" />
+                                                                                            ) : (
+                                                                                                'Test'
+                                                                                            )}
+                                                                                        </Button>
                                                                                         <Button
                                                                                             variant="outline-primary"
                                                                                             size="sm"
@@ -693,6 +779,31 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                     {selectedIntegration && (
                         <Form>
                             <Row>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label>
+                                            Instance Name
+                                            <span className="text-danger ms-1">*</span>
+                                        </Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            value={formData.instance_name || ''}
+                                            onChange={(e) => handleFormChange('instance_name', e.target.value)}
+                                            placeholder={`${selectedIntegration.name} Instance`}
+                                            isInvalid={!!formErrors.instance_name}
+                                        />
+                                        {formErrors.instance_name && (
+                                            <Form.Control.Feedback type="invalid">
+                                                {formErrors.instance_name}
+                                            </Form.Control.Feedback>
+                                        )}
+                                        <Form.Text className="text-muted">
+                                            Enter a unique name for this integration instance
+                                        </Form.Text>
+                                    </Form.Group>
+                                </Col>
+                            </Row>
+                            <Row>
                                 {selectedIntegration.parameters?.map(param => (
                                     <Col md={6} key={param.id} className="mb-3">
                                         <Form.Group>
@@ -723,20 +834,6 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                         Cancel
                     </Button>
                     <Button 
-                        variant="outline-primary" 
-                        onClick={handleTestConnection}
-                        disabled={isTesting || isSaving}
-                    >
-                        {isTesting ? (
-                            <>
-                                <Spinner size="sm" className="me-2" />
-                                Testing...
-                            </>
-                        ) : (
-                            'Test'
-                        )}
-                    </Button>
-                    <Button 
                         variant="primary" 
                         onClick={handleSaveInstance}
                         disabled={isTesting || isSaving}
@@ -763,6 +860,31 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 <Modal.Body>
                     {selectedIntegration && (
                         <Form>
+                            <Row>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label>
+                                            Instance Name
+                                            <span className="text-danger ms-1">*</span>
+                                        </Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            value={formData.instance_name || ''}
+                                            onChange={(e) => handleFormChange('instance_name', e.target.value)}
+                                            placeholder="Enter instance name"
+                                            isInvalid={!!formErrors.instance_name}
+                                        />
+                                        {formErrors.instance_name && (
+                                            <Form.Control.Feedback type="invalid">
+                                                {formErrors.instance_name}
+                                            </Form.Control.Feedback>
+                                        )}
+                                        <Form.Text className="text-muted">
+                                            Enter a unique name for this integration instance
+                                        </Form.Text>
+                                    </Form.Group>
+                                </Col>
+                            </Row>
                             <Row>
                                 {selectedIntegration.parameters?.map(param => (
                                     <Col md={6} key={param.id} className="mb-3">
@@ -858,7 +980,47 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 .integration-info .text-muted {
                     font-size: 0.875rem;
                 }
+                
+                .instance-name-text {
+                    font-size: 0.9rem;
+                }
             `}</style>
+
+            {/* Success Modal */}
+            <Modal centered show={showSuccessModal} onHide={() => setShowSuccessModal(false)} keyboard={false} className="modal fade">
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        <i className="ri-checkbox-circle-line text-success me-2"></i>
+                        Success
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="mb-0">{modalMessage}</p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="primary" onClick={() => setShowSuccessModal(false)}>
+                        OK
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Error Modal */}
+            <Modal centered show={showErrorModal} onHide={() => setShowErrorModal(false)} keyboard={false} className="modal fade">
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        <i className="ri-error-warning-line text-danger me-2"></i>
+                        Error
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="mb-0">{modalMessage}</p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowErrorModal(false)}>
+                        Close
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </Fragment>
     );
 };

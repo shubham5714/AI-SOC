@@ -5,8 +5,7 @@ import SpkTables from "@/shared/@spk-reusable-components/reusable-tables/spk-tab
 import SpkBadge from "@/shared/@spk-reusable-components/reusable-uiElements/spk-badge";
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
 import SpkDropdown from "@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown";
-import { TicketCardStat, Status, Priority, tags } from "@/shared/data/tickets/tickets-data";
-import Pageheader from "@/shared/layouts-components/pageheader/pageheader";
+import { Status, Priority, tags } from "@/shared/data/tickets/tickets-data";
 import Seo from "@/shared/layouts-components/seo/seo";
 import { supabase } from "@/shared/lib/supabase";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
@@ -712,7 +711,6 @@ const TicketsList: React.FC<TicketsListProps> = () => {
     return (
         <Fragment>
             <Seo title="Tickets Management" />
-            <Pageheader title='Tickets' subtitle='Management' currentpage='Tickets List' activepage='Tickets List' />
             
             {/* Custom styles for column settings */}
             <style jsx>{`
@@ -745,6 +743,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 .table-responsive {
                     overflow-x: auto;
                     -webkit-overflow-scrolling: touch;
+                    min-height: 50vh;
                 }
                 .table-responsive::-webkit-scrollbar {
                     height: 4px;
@@ -792,47 +791,26 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 }
             `}</style>
             
-            {/* Stats Cards */}
-            <Row>
-                {TicketCardStat && TicketCardStat.map((idx) => (
-                    <Col xxl={3} key={idx.title}>
-                        <Card className="custom-card overflow-hidden main-content-card">
-                            <Card.Body>
-                                <div className="d-flex align-items-start justify-content-between mb-2">
-                                    <div>
-                                        <span className="text-muted d-block mb-1">{idx.title}</span>
-                                        <h4 className="fw-medium mb-0">{idx.count}</h4>
-                                    </div>
-                                    <div className="lh-1">
-                                        <span className={`avatar avatar-md avatar-rounded bg-${idx.iconBg}`}>
-                                            <i className={`ri-${idx.icon} fs-5`}></i>
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="text-muted fs-13">{idx.trend} By <span className={`text-${idx.arrow === 'up' ? 'success' : 'danger'}`}>{idx.percentage}<i className={`ti ti-arrow-narrow-${idx.arrow} fs-16`}></i></span></div>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                ))}
-            </Row>
-
             {/* Tickets Table */}
-            <Row>
+            <Row className="g-0" style={{ marginLeft: '-1.5rem', marginRight: '-1.5rem' }}>
                 <Col xxl={12} xl={12}>
-                    <Card className="custom-card">
-                        <Card.Header className="justify-content-between">
-                            <Card.Title>
+                    <Card className="custom-card" style={{ marginBottom: 0 }}>
+                        <Card.Header className="d-flex align-items-center justify-content-between" style={{ paddingTop: '0.75rem', paddingBottom: '0.75rem' }}>
+                            <Card.Title className="mb-0">
                                 Tickets
                             </Card.Title>
+                            <SpkButton 
+                                Customclass="btn btn-wave" 
+                                Buttonvariant='primary-light'
+                            >
+                                <i className="ri-upload-cloud-line align-middle me-1"></i> Export report
+                            </SpkButton>
                         </Card.Header>
                         
                         {/* Search Bar */}
                         <Card.Body className="border-bottom">
                             <Row className="mb-3">
                                 <Col md={8}>
-                                    <Form.Label htmlFor="search-input" className="fw-medium">
-                                        <i className="ri-search-line me-1"></i>Search Tickets
-                                    </Form.Label>
                                     <InputGroup>
                                         <Button 
                                             variant="outline-info" 
@@ -910,14 +888,14 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                 </Col>
                             </Row>
                         </Card.Body>
-                        <Card.Body className="p-0">
+                        <Card.Body className="p-0" style={{ minHeight: '65vh' }}>
                             {(loading || tenantLoading || dateRangeLoading) ? (
                                 <div className="d-flex justify-content-center align-items-center p-4">
                                     <Spinner animation="border" variant="primary" />
                                     <span className="ms-2">Loading tickets...</span>
                                 </div>
                             ) : (
-                                <div className="table-responsive" style={{ overflowX: 'auto', minWidth: '100%' }}>
+                                <div className="table-responsive" style={{ overflowX: 'auto', minWidth: '100%', minHeight: '65vh' }}>
                                     <SpkTables 
                                         tableClass="table text-nowrap" 
                                         checked={selectAll} 
@@ -1040,7 +1018,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                 </div>
                             )}
                         </Card.Body>
-                        <Card.Footer className="border-top-0">
+                        <Card.Footer className="border-top-0" style={{ paddingTop: '0.75rem', paddingBottom: '0.75rem' }}>
                             <nav aria-label="Page navigation">
                                 <Pagination className="pagination mb-0 float-end">
                                     <Pagination.Prev 
