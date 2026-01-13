@@ -36,7 +36,9 @@ interface IntegrationInstance {
     id: number;
     integration_id: number;
     tenant_id: string;
+    tenant_name?: string;
     instance_name: string;
+    logo?: string;
     configuration: { [key: string]: any };
     status: 'active' | 'inactive' | 'inprogress';
     last_tested_at?: string;
@@ -354,17 +356,23 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     const handleSaveInstance = async () => {
         if (!validateForm() || !selectedIntegration) return;
 
-        // Get tenant_id from context
+        // Get tenant_id and tenant_name from context
         let tenantId: string | null = null;
+        let tenantName: string | null = null;
         if (assignedTenants && assignedTenants.length > 0) {
             if (selectedTenantIds === 'all') {
                 // Use first tenant if 'all' is selected
                 tenantId = assignedTenants[0]?.id || null;
+                tenantName = assignedTenants[0]?.name || null;
             } else if (Array.isArray(selectedTenantIds) && selectedTenantIds.length > 0) {
                 // Use first selected tenant
                 tenantId = selectedTenantIds[0];
+                const selectedTenant = assignedTenants.find(t => t.id === tenantId);
+                tenantName = selectedTenant?.name || null;
             } else if (typeof selectedTenantIds === 'string') {
                 tenantId = selectedTenantIds;
+                const selectedTenant = assignedTenants.find(t => t.id === tenantId);
+                tenantName = selectedTenant?.name || null;
             }
         }
 
@@ -385,7 +393,9 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 .insert({
                     integration_id: selectedIntegration.id,
                     tenant_id: tenantId,
+                    tenant_name: tenantName,
                     name: selectedIntegration.name,
+                    logo: selectedIntegration.logo,
                     instance_name: instance_name?.toString().trim() || `${selectedIntegration.name} Instance`,
                     configuration: configuration,
                     status: 'pending'
