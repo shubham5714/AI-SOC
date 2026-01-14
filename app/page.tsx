@@ -19,6 +19,7 @@ const Page = () => {
     const [load, setLoad] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [isProcessingLogin, setIsProcessingLogin] = useState(false);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
     const theme = useContext(Initialload);
     const updateTenants = useUpdateTenants();
@@ -76,6 +77,25 @@ const Page = () => {
     };
 
     const router = useRouter();
+
+    // If user is already authenticated, redirect away from login page
+    useEffect(() => {
+        const checkExistingSession = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    router.replace("/dashboards/executive");
+                    return;
+                }
+            } catch (error) {
+                console.error("Error checking existing auth session:", error);
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+
+        checkExistingSession();
+    }, [router]);
 
     const Login = async (e: React.FormEvent) => {
         e.preventDefault();
