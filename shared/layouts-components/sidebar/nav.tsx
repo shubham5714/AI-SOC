@@ -78,7 +78,7 @@ export const MENUITEMS: Menuitemtype[] = [
   },
 
   {
-    title: "Tickets", icon: Tableicon, type: "link", path: "/tickets", active: false, selected: false, dirchange: false
+    title: "Investigations", icon: Mapsicon, type: "link", path: "/tickets", active: false, selected: false, dirchange: false
   },
 
   {

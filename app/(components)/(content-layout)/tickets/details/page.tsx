@@ -254,13 +254,13 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='graph' className="px-4 py-2" role="tab" aria-selected="false">
-                                        Alert Graph
+                                    <Nav.Link as='button' eventKey='logs' className="px-4 py-2" role="tab" aria-selected="false">
+                                        Raw Logs
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='logs' className="px-4 py-2" role="tab" aria-selected="false">
-                                        Raw Logs
+                                    <Nav.Link as='button' eventKey='graph' className="px-4 py-2" role="tab" aria-selected="false">
+                                        Alert Graph
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
@@ -568,196 +568,85 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
             </Row>
                             </Tab.Pane>
                             <Tab.Pane eventKey='assets' className="pt-3 px-4 pb-4" role="tabpanel">
-                                <Row className="g-3">
-                                    {/* IP Addresses */}
-                                    <Col xl={6}>
-                                        <h6 className="mb-3 fw-semibold">IP Addresses</h6>
-                                        <div className="d-flex flex-column gap-2">
-                                            {[
-                                                { value: '192.168.1.100', score: 85, color: 'danger' },
-                                                { value: '10.0.0.45', score: 45, color: 'warning' },
-                                                { value: '172.16.0.20', score: 25, color: 'success' },
-                                            ].map((ip, index) => (
-                                                <Card key={index} className={`border border-${ip.color} custom-card mb-0`}>
-                                                    <Card.Body className="py-2 px-3">
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                            <div className="flex-fill">
-                                                                <p className="fs-14 fw-medium mb-1 lh-1">{ip.value}</p>
-                                                            </div>
-                                                            <div>
-                                                                <SpkBadge Customclass={`bg-${ip.color}-transparent`}>
-                                                                    Score: {ip.score}
-                                                                </SpkBadge>
-                                                            </div>
-                                                        </div>
-                                                    </Card.Body>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </Col>
-                                    {/* URLs */}
-                                    <Col xl={6}>
-                                        <h6 className="mb-3 fw-semibold">URLs</h6>
-                                        <div className="d-flex flex-column gap-2">
-                                            {[
-                                                { value: 'http://malicious-site.com/payload', score: 92, color: 'danger' },
-                                                { value: 'https://suspicious-domain.net/api', score: 60, color: 'warning' },
-                                                { value: 'http://legitimate-site.org/page', score: 15, color: 'success' },
-                                            ].map((url, index) => (
-                                                <Card key={index} className={`border border-${url.color} custom-card mb-0`}>
-                                                    <Card.Body className="py-2 px-3">
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                            <div className="flex-fill">
-                                                                <p className="fs-14 fw-medium mb-1 lh-1 text-break">{url.value}</p>
-                                                            </div>
-                                                            <div>
-                                                                <SpkBadge Customclass={`bg-${url.color}-transparent`}>
-                                                                    Score: {url.score}
-                                                                </SpkBadge>
-                                                            </div>
-                                                        </div>
-                                                    </Card.Body>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </Col>
-                                    {/* Domains */}
-                                    <Col xl={6}>
-                                        <h6 className="mb-3 fw-semibold">Domains</h6>
-                                        <div className="d-flex flex-column gap-2">
-                                            {[
-                                                { value: 'evil-domain.com', score: 88, color: 'danger' },
-                                                { value: 'suspicious-site.net', score: 55, color: 'warning' },
-                                                { value: 'trusted-domain.org', score: 20, color: 'success' },
-                                            ].map((domain, index) => (
-                                                <Card key={index} className={`border border-${domain.color} custom-card mb-0`}>
-                                                    <Card.Body className="py-2 px-3">
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                            <div className="flex-fill">
-                                                                <p className="fs-14 fw-medium mb-1 lh-1">{domain.value}</p>
-                                                            </div>
-                                                            <div>
-                                                                <SpkBadge Customclass={`bg-${domain.color}-transparent`}>
-                                                                    Score: {domain.score}
-                                                                </SpkBadge>
-                                                            </div>
-                                                        </div>
-                                                    </Card.Body>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </Col>
-                                    {/* Hashes */}
-                                    <Col xl={6}>
-                                        <h6 className="mb-3 fw-semibold">Hashes</h6>
-                                        <div className="d-flex flex-column gap-2">
-                                            {[
-                                                { value: 'a1b2c3d4e5f6...7890', score: 95, color: 'danger' },
-                                                { value: 'f6e5d4c3b2a1...0987', score: 50, color: 'warning' },
-                                                { value: '1234567890ab...cdef', score: 18, color: 'success' },
-                                            ].map((hash, index) => (
-                                                <Card key={index} className={`border border-${hash.color} custom-card mb-0`}>
-                                                    <Card.Body className="py-2 px-3">
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                            <div className="flex-fill">
-                                                                <p className="fs-14 fw-medium mb-1 lh-1 font-monospace">{hash.value}</p>
-                                                            </div>
-                                                            <div>
-                                                                <SpkBadge Customclass={`bg-${hash.color}-transparent`}>
-                                                                    Score: {hash.score}
-                                                                </SpkBadge>
-                                                            </div>
-                                                        </div>
-                                                    </Card.Body>
-                                                </Card>
-                                            ))}
-                                        </div>
-                                    </Col>
-                                </Row>
-                            </Tab.Pane>
-                            <Tab.Pane eventKey='graph' className="pt-3 px-4 pb-4" role="tabpanel">
-                                <Row>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Overview</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    Alert graph visualization will be displayed here.
-                                                </div>
-                                            </Card.Body>
-                                        </Card>
-                                    </Col>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Details</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    Graph details and relationships will be shown here.
-                                                </div>
-                                            </Card.Body>
-                                        </Card>
-                                    </Col>
-                                </Row>
                             </Tab.Pane>
                             <Tab.Pane eventKey='logs' className="pt-3 px-4 pb-4" role="tabpanel">
-                                <Row>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Overview</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    Raw log entries overview will be displayed here.
-                                                </div>
+                                <div className="d-flex flex-column gap-3">
+                                    {[
+                                        {
+                                            timestamp: "2024-06-18T10:30:45.123Z",
+                                            level: "WARNING",
+                                            source: "firewall",
+                                            message: "Multiple failed login attempts detected",
+                                            data: {
+                                                "ip_address": "192.168.1.100",
+                                                "username": "admin",
+                                                "failed_attempts": 5,
+                                                "event_type": "authentication_failure",
+                                                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                                                "geolocation": {
+                                                    "country": "US",
+                                                    "city": "New York",
+                                                    "latitude": 40.7128,
+                                                    "longitude": -74.0060
+                                                }
+                                            }
+                                        },
+                                        {
+                                            timestamp: "2024-06-18T10:31:12.456Z",
+                                            level: "ERROR",
+                                            source: "ids",
+                                            message: "Suspicious network traffic pattern detected",
+                                            data: {
+                                                "src_ip": "10.0.0.45",
+                                                "dst_ip": "172.16.0.20",
+                                                "protocol": "TCP",
+                                                "port": 443,
+                                                "bytes_sent": 1024000,
+                                                "bytes_received": 512000,
+                                                "duration_seconds": 45,
+                                                "threat_score": 85,
+                                                "signature": "ET MALWARE Known Malicious IP"
+                                            }
+                                        },
+                                        {
+                                            timestamp: "2024-06-18T10:32:05.789Z",
+                                            level: "INFO",
+                                            source: "endpoint",
+                                            message: "File hash detected in threat intelligence database",
+                                            data: {
+                                                "file_path": "/var/tmp/suspicious_file.exe",
+                                                "file_hash": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+                                                "hash_type": "SHA256",
+                                                "file_size": 2621440,
+                                                "threat_intel_match": true,
+                                                "threat_feed": "VirusTotal",
+                                                "detection_count": 42,
+                                                "severity": "HIGH"
+                                            }
+                                        }
+                                    ].map((log, index) => (
+                                        <Card key={index} className="custom-card mb-0" style={{ backgroundColor: '#000', borderColor: '#333' }}>
+                                            <Card.Body className="p-3">
+                                                <pre style={{ 
+                                                    margin: 0, 
+                                                    color: '#0f0', 
+                                                    backgroundColor: '#000',
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '0.875rem',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                    overflowX: 'auto'
+                                                }}>
+                                                    {JSON.stringify(log, null, 2)}
+                                                </pre>
                                             </Card.Body>
                                         </Card>
-                                    </Col>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Details</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    Detailed raw log data will be shown here.
-                                                </div>
-                                            </Card.Body>
-                                        </Card>
-                                    </Col>
-                                </Row>
+                                    ))}
+                                </div>
+                            </Tab.Pane>
+                            <Tab.Pane eventKey='graph' className="pt-3 px-4 pb-4" role="tabpanel">
                             </Tab.Pane>
                             <Tab.Pane eventKey='insights' className="pt-3 px-4 pb-4" role="tabpanel">
-                                <Row>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Overview</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    AI-generated insights overview will be displayed here.
-                                                </div>
-                                            </Card.Body>
-                                        </Card>
-                                    </Col>
-                                    <Col xl={6}>
-                                        <Card className="custom-card">
-                                            <Card.Header>
-                                                <Card.Title>Alert Details</Card.Title>
-                                            </Card.Header>
-                                            <Card.Body>
-                                                <div className="text-muted">
-                                                    Detailed insights and recommendations will be shown here.
-                                                </div>
-                                            </Card.Body>
-                                        </Card>
-                                    </Col>
-                                </Row>
                             </Tab.Pane>
                         </Tab.Content>
                     </Card.Body>

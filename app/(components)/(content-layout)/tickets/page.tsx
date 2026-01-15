@@ -797,7 +797,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                     <Card className="custom-card" style={{ marginBottom: 0 }}>
                         <Card.Header className="d-flex align-items-center justify-content-between" style={{ paddingTop: '0.75rem', paddingBottom: '0.75rem' }}>
                             <Card.Title className="mb-0">
-                                Tickets
+                                Investigations
                             </Card.Title>
                             <SpkButton 
                                 Customclass="btn btn-wave" 
@@ -931,32 +931,38 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             <span className="fw-medium">{ticket.title}</span>
                                                         )}
                                                         {col.key === 'status' && (
-                                                            <SpkBadge 
-                                                                variant={
-                                                                    ticket.status.toLowerCase() === 'open' ? 'success-transparent' :
-                                                                    ticket.status.toLowerCase() === 'closed' ? 'secondary-transparent' :
-                                                                    ticket.status.toLowerCase() === 'in progress' ? 'warning-transparent' :
-                                                                    'primary-transparent'
+                                                            <SpkButton 
+                                                                Buttontype="button"
+                                                                Buttonvariant={
+                                                                    ticket.status.toLowerCase() === 'open' ? 'light' :
+                                                                    ticket.status.toLowerCase() === 'closed' ? 'dark' :
+                                                                    ticket.status.toLowerCase() === 'in progress' ? 'warning-light' :
+                                                                    'primary-light'
                                                                 }
+                                                                Customclass="btn-sm"
+                                                                Style={{ minWidth: '70px', width: '70px' }}
                                                             >
                                                                 {ticket.status}
-                                                            </SpkBadge>
+                                                            </SpkButton>
                                                         )}
                                                         {col.key === 'priority' && (
                                                             <SpkBadge variant={`${ticket.priority_color || 'secondary'}-transparent`}>{ticket.priority}</SpkBadge>
                                                         )}
                                                         {col.key === 'severity' && (
-                                                            <SpkBadge 
-                                                                variant={
-                                                                    (ticket.severity || '').toLowerCase() === 'critical' ? 'danger-transparent' :
-                                                                    (ticket.severity || '').toLowerCase() === 'high' ? 'warning-transparent' :
-                                                                    (ticket.severity || '').toLowerCase() === 'medium' ? 'info-transparent' :
-                                                                    (ticket.severity || '').toLowerCase() === 'low' ? 'success-transparent' :
-                                                                    'secondary-transparent'
+                                                            <SpkButton 
+                                                                Buttontype="button"
+                                                                Buttonvariant={
+                                                                    (ticket.severity || '').toLowerCase() === 'critical' ? 'danger' :
+                                                                    (ticket.severity || '').toLowerCase() === 'high' ? 'warning' :
+                                                                    (ticket.severity || '').toLowerCase() === 'medium' ? 'info' :
+                                                                    (ticket.severity || '').toLowerCase() === 'low' ? 'success' :
+                                                                    'secondary'
                                                                 }
+                                                                Customclass="btn-sm"
+                                                                Style={{ minWidth: '70px', width: '70px' }}
                                                             >
                                                                 {ticket.severity || '-'}
-                                                            </SpkBadge>
+                                                            </SpkButton>
                                                         )}
                                                         {col.key === 'tenant_id' && (
                                                             <span className="fw-medium">{ticket.tenant_id}</span>
@@ -983,17 +989,20 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                         const lowerValue = value.toLowerCase();
                                                                         if (['critical', 'high', 'medium', 'low'].includes(lowerValue)) {
                                                                             return (
-                                                                                <SpkBadge 
-                                                                                    variant={
-                                                                                        lowerValue === 'critical' ? 'danger-transparent' :
-                                                                                        lowerValue === 'high' ? 'warning-transparent' :
-                                                                                        lowerValue === 'medium' ? 'info-transparent' :
-                                                                                        lowerValue === 'low' ? 'success-transparent' :
-                                                                                        'secondary-transparent'
+                                                                                <SpkButton 
+                                                                                    Buttontype="button"
+                                                                                    Buttonvariant={
+                                                                                        lowerValue === 'critical' ? 'danger' :
+                                                                                        lowerValue === 'high' ? 'warning' :
+                                                                                        lowerValue === 'medium' ? 'info' :
+                                                                                        lowerValue === 'low' ? 'success' :
+                                                                                        'secondary'
                                                                                     }
+                                                                                    Customclass="btn-sm"
+                                                                                    Style={{ minWidth: '80px', width: '80px' }}
                                                                                 >
                                                                                     {value}
-                                                                                </SpkBadge>
+                                                                                </SpkButton>
                                                                             );
                                                                         }
                                                                     }
