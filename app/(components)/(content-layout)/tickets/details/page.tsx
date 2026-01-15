@@ -1,6 +1,5 @@
 "use client"
 // Ticket Details Page - Restructured based on wireframe
-// Using static/hardcoded data for now
 import SpkBadge from "@/shared/@spk-reusable-components/reusable-uiElements/spk-badge";
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
 import SpkDropdown from "@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown";
@@ -8,21 +7,98 @@ import SpkButtongroup from "@/shared/@spk-reusable-components/reusable-uiElement
 import SpkSelect from "@/shared/@spk-reusable-components/reusable-plugins/spk-reactselect";
 import SpkTables from "@/shared/@spk-reusable-components/reusable-tables/spk-tables";
 import Seo from "@/shared/layouts-components/seo/seo";
-import React, { Fragment, useState } from "react";
-import { Card, Col, Dropdown, ListGroup, Nav, Row, Tab } from "react-bootstrap";
+import { supabase } from "@/shared/lib/supabase";
+import { useTenantContext } from "@/shared/contextapi/TenantContext";
+import { useSearchParams } from "next/navigation";
+import React, { Fragment, useState, useEffect } from "react";
+import { Card, Col, Dropdown, ListGroup, Nav, Row, Tab, Spinner } from "react-bootstrap";
 
 interface TicketDetailsProps { }
 
-const TicketDetails: React.FC<TicketDetailsProps> = () => {
-    const [severity, setSeverity] = useState<'Low' | 'Medium' | 'High'>('High');
+interface MitreTactic {
+    name: string;
+    count: number;
+    active: boolean;
+    technique?: string;
+}
 
-    const handleSeverityChange = (eventKey: string | null) => {
+interface TicketData {
+    id: number;
+    title: string;
+    status: string;
+    priority: string;
+    severity?: string;
+    tenant_id: string;
+    description?: string;
+    mitre?: MitreTactic[] | string;
+    [key: string]: any;
+}
+
+const TicketDetails: React.FC<TicketDetailsProps> = () => {
+    const searchParams = useSearchParams();
+    const ticketId = searchParams.get('id');
+    const { selectedTenantIds, assignedTenants } = useTenantContext();
+    
+    const [ticket, setTicket] = useState<TicketData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [severity, setSeverity] = useState<'Low' | 'Medium' | 'High'>('High');
+    const [mitreStages, setMitreStages] = useState<MitreTactic[]>([]);
+    const [status, setStatus] = useState<string>('');
+
+    const handleSeverityChange = async (eventKey: string | null) => {
+        if (!ticket || !eventKey) return;
+
+        let newSeverity: 'Low' | 'Medium' | 'High';
         if (eventKey === 'low') {
-            setSeverity('Low');
+            newSeverity = 'Low';
         } else if (eventKey === 'medium') {
-            setSeverity('Medium');
-        } else if (eventKey === 'high') {
-            setSeverity('High');
+            newSeverity = 'Medium';
+        } else {
+            newSeverity = 'High';
+        }
+
+        setSeverity(newSeverity);
+
+        try {
+            // Update severity in Supabase
+            const { error } = await supabase
+                .from('tickets')
+                .update({ severity: newSeverity, updated_at: new Date().toISOString() })
+                .eq('id', ticket.id)
+                .eq('tenant_id', ticket.tenant_id);
+
+            if (error) {
+                console.error('Error updating severity:', error);
+                // Revert severity on error
+                if (ticket.severity) {
+                    const sev = ticket.severity.toLowerCase();
+                    if (sev === 'critical' || sev === 'high') {
+                        setSeverity('High');
+                    } else if (sev === 'medium') {
+                        setSeverity('Medium');
+                    } else {
+                        setSeverity('Low');
+                    }
+                }
+                alert('Failed to update severity. Please try again.');
+            } else {
+                // Update local ticket state
+                setTicket({ ...ticket, severity: newSeverity, updated_at: new Date().toISOString() });
+            }
+        } catch (error) {
+            console.error('Error updating severity:', error);
+            // Revert severity on error
+            if (ticket.severity) {
+                const sev = ticket.severity.toLowerCase();
+                if (sev === 'critical' || sev === 'high') {
+                    setSeverity('High');
+                } else if (sev === 'medium') {
+                    setSeverity('Medium');
+                } else {
+                    setSeverity('Low');
+                }
+            }
+            alert('Failed to update severity. Please try again.');
         }
     };
 
@@ -31,6 +107,142 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         if (severity === 'Medium') return 'warning';
         return 'success';
     };
+
+    const getStatusVariant = () => {
+        if (status.toLowerCase() === 'open') return 'light';
+        return 'dark';
+    };
+
+    const handleStatusDropdownChange = async (eventKey: string | null) => {
+        if (!ticket || !eventKey) return;
+
+        const newStatus = eventKey === 'open' ? 'open' : 'closed';
+        await handleStatusChange({ value: newStatus });
+    };
+
+    // Fetch ticket data from Supabase
+    useEffect(() => {
+        const fetchTicket = async () => {
+            if (!ticketId) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                setLoading(true);
+                
+                // Determine tenant filter
+                let tenantFilter: string[] = [];
+                if (selectedTenantIds === 'all') {
+                    tenantFilter = assignedTenants.map(t => t.id);
+                } else if (Array.isArray(selectedTenantIds)) {
+                    tenantFilter = selectedTenantIds;
+                } else if (typeof selectedTenantIds === 'string' && selectedTenantIds !== 'all') {
+                    tenantFilter = [selectedTenantIds];
+                }
+
+                // Build query
+                let query = supabase
+                    .from('tickets')
+                    .select('*')
+                    .eq('id', parseInt(ticketId));
+
+                // Apply tenant filter
+                if (tenantFilter.length > 0) {
+                    query = query.in('tenant_id', tenantFilter);
+                }
+
+                const { data, error } = await query.single();
+
+                if (error) {
+                    console.error('Error fetching ticket:', error);
+                    setLoading(false);
+                    return;
+                }
+
+                if (data) {
+                    setTicket(data);
+                    
+                    // Set status from ticket data
+                    if (data.status) {
+                        setStatus(data.status);
+                    }
+                    
+                    // Set severity from ticket data
+                    if (data.severity) {
+                        const sev = data.severity.toLowerCase();
+                        if (sev === 'critical' || sev === 'high') {
+                            setSeverity('High');
+                        } else if (sev === 'medium') {
+                            setSeverity('Medium');
+                        } else {
+                            setSeverity('Low');
+                        }
+                    }
+
+                    // Parse MITRE data
+                    if (data.mitre) {
+                        let mitreData: MitreTactic[] = [];
+                        if (typeof data.mitre === 'string') {
+                            try {
+                                mitreData = JSON.parse(data.mitre);
+                            } catch (e) {
+                                console.error('Error parsing MITRE data:', e);
+                            }
+                        } else if (Array.isArray(data.mitre)) {
+                            mitreData = data.mitre;
+                        }
+
+                        // Ensure all 12 tactics are present
+                        const allTactics = [
+                            'Initial Access',
+                            'Execution',
+                            'Persistence',
+                            'Privilege Escalation',
+                            'Defense Evasion',
+                            'Credential Access',
+                            'Discovery',
+                            'Lateral Movement',
+                            'Collection',
+                            'Command and Control',
+                            'Exfiltration',
+                            'Impact'
+                        ];
+
+                        const mitreMap = new Map(mitreData.map(t => [t.name, t]));
+                        const completeMitreData = allTactics.map(name => {
+                            const existing = mitreMap.get(name);
+                            return existing || { name, count: 0, active: false };
+                        });
+
+                        setMitreStages(completeMitreData);
+                    } else {
+                        // Default empty MITRE stages
+                        setMitreStages([
+                            { name: 'Initial Access', count: 0, active: false },
+                            { name: 'Execution', count: 0, active: false },
+                            { name: 'Persistence', count: 0, active: false },
+                            { name: 'Privilege Escalation', count: 0, active: false },
+                            { name: 'Defense Evasion', count: 0, active: false },
+                            { name: 'Credential Access', count: 0, active: false },
+                            { name: 'Discovery', count: 0, active: false },
+                            { name: 'Lateral Movement', count: 0, active: false },
+                            { name: 'Collection', count: 0, active: false },
+                            { name: 'Command and Control', count: 0, active: false },
+                            { name: 'Exfiltration', count: 0, active: false },
+                            { name: 'Impact', count: 0, active: false }
+                        ]);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching ticket:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTicket();
+    }, [ticketId, selectedTenantIds, assignedTenants]);
     // Static data for dropdowns
     const assignedToOptions = [
         { value: 'user1', label: 'John Doe' },
@@ -40,10 +252,39 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
 
     const statusOptions = [
         { value: 'open', label: 'Open' },
-        { value: 'in-progress', label: 'In Progress' },
-        { value: 'resolved', label: 'Resolved' },
         { value: 'closed', label: 'Closed' },
     ];
+
+    // Handle status change
+    const handleStatusChange = async (selectedOption: any) => {
+        if (!ticket || !selectedOption) return;
+
+        const newStatus = selectedOption.value;
+        setStatus(newStatus);
+
+        try {
+            // Update status in Supabase
+            const { error } = await supabase
+                .from('tickets')
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq('id', ticket.id)
+                .eq('tenant_id', ticket.tenant_id);
+
+            if (error) {
+                console.error('Error updating status:', error);
+                // Revert status on error
+                setStatus(ticket.status);
+                alert('Failed to update status. Please try again.');
+            } else {
+                // Update local ticket state
+                setTicket({ ...ticket, status: newStatus, updated_at: new Date().toISOString() });
+            }
+        } catch (error) {
+            console.error('Error updating status:', error);
+            setStatus(ticket.status);
+            alert('Failed to update status. Please try again.');
+        }
+    };
 
     // Custom styles for smaller select boxes
     const selectStyles = {
@@ -97,6 +338,36 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         { value: 'defense-evasion', label: 'Defense Evasion' },
     ];
 
+    // Calculate MITRE summary
+    const activeTacticsCount = mitreStages.filter(t => t.active).length;
+    const activeTechniquesCount = mitreStages.filter(t => t.active && t.count > 0).reduce((sum, t) => sum + t.count, 0);
+
+    if (loading) {
+        return (
+            <Fragment>
+                <Seo title="Ticket Details" />
+                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+                    <Spinner animation="border" variant="primary" />
+                </div>
+            </Fragment>
+        );
+    }
+
+    if (!ticket) {
+        return (
+            <Fragment>
+                <Seo title="Ticket Details" />
+                <Card className="custom-card mb-3 mt-3">
+                    <Card.Body>
+                        <div className="text-center py-4">
+                            <p className="text-muted">Ticket not found</p>
+                        </div>
+                    </Card.Body>
+                </Card>
+            </Fragment>
+        );
+    }
+
     return (
         <Fragment>
             <Seo title="Ticket Details" />
@@ -123,14 +394,14 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                         <Dropdown.Item as="li" eventKey="low">Low</Dropdown.Item>
                                     </SpkDropdown>
                                 </SpkButtongroup>
-                                <h5 className="fw-semibold mb-0">ALERT-2024-001 - Suspicious Network Activity Detected</h5>
+                                <h5 className="fw-semibold mb-0">
+                                    {ticket.name ? `INV-${ticket.id} : ${ticket.name}` : (ticket.title || `INV-${ticket.id}`)}
+                                </h5>
                             </div>
                             <div className="mb-2">
                                 <div className="fs-15 fw-medium mb-1">Description</div>
                                 <p className="text-muted mb-0">
-                                    Multiple failed login attempts detected from external IP addresses. 
-                                    Unusual network traffic patterns observed during off-hours. 
-                                    Potential brute force attack or unauthorized access attempt.
+                                    {ticket.description || 'No description available.'}
                                 </p>
                             </div>
                         </Col>
@@ -150,37 +421,29 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             </div>
                             <div style={{ width: '150px' }}>
                                 <div className="fs-13 fw-medium mb-1">Status</div>
-                                <SpkSelect
-                                    option={statusOptions}
-                                    defaultvalue={statusOptions[1]}
-                                    placeholder="Select status..."
-                                    searchable={false}
-                                    clearable={false}
-                                    mainClass="react-select-container"
-                                    classNameprefix="react-select"
-                                    styles={selectStyles}
-                                />
+                                <SpkButtongroup>
+                                    <SpkDropdown 
+                                        Togglevariant={getStatusVariant()}
+                                        Toggletext={status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : 'Open'}
+                                        Customtoggleclass={`shadow-${getStatusVariant()} btn-sm`}
+                                        Customclass="status-dropdown-wrapper"
+                                        Size="sm"
+                                        Menuas="ul"
+                                        onSelectfunc={handleStatusDropdownChange}
+                                        Id="status-dropdown"
+                                    >
+                                        <Dropdown.Item as="li" eventKey="open">Open</Dropdown.Item>
+                                        <Dropdown.Item as="li" eventKey="closed">Closed</Dropdown.Item>
+                                    </SpkDropdown>
+                                </SpkButtongroup>
                             </div>
                                 </Col>
                     </Row>
                     <Row>
                                 <Col xl={12}>
-                            <div className="fs-14 fw-medium mb-2">MITRE ATT&CK® <span className="fs-11">1 Tactics and 1 Techniques</span></div>
+                            <div className="fs-14 fw-medium mb-2">MITRE ATT&CK® <span className="fs-11">{activeTacticsCount} Tactics and {activeTechniquesCount} Techniques</span></div>
                             <div className="d-flex align-items-center gap-0 border rounded p-2" style={{ overflowX: 'auto', width: '100%' }}>
-                                {[
-                                    { name: 'Initial Access', count: 1, active: true, technique: 'T1078 - Valid Accounts' },
-                                    { name: 'Execution', count: 0, active: false },
-                                    { name: 'Persistence', count: 0, active: false },
-                                    { name: 'Privilege Escalation', count: 0, active: false },
-                                    { name: 'Defense Evasion', count: 0, active: false },
-                                    { name: 'Credential Access', count: 0, active: false },
-                                    { name: 'Discovery', count: 0, active: false },
-                                    { name: 'Lateral Movement', count: 0, active: false },
-                                    { name: 'Collection', count: 0, active: false },
-                                    { name: 'Command and Control', count: 0, active: false },
-                                    { name: 'Exfiltration', count: 0, active: false },
-                                    { name: 'Impact', count: 0, active: false },
-                                ].map((phase, index, array) => (
+                                {mitreStages.map((phase, index, array) => (
                                     <React.Fragment key={phase.name}>
                                         <div 
                                             className="text-center px-2" 
@@ -522,43 +785,43 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                 <SpkTables tableClass="table text-nowrap">
                                     <tr>
                                                             <td><span className="fw-medium">Alert ID :</span></td>
-                                                            <td>ALERT-2024-001</td>
+                                                            <td>{ticket.name ? `INV-${ticket.id} : ${ticket.name}` : (ticket.id || '-')}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Alert Tags :</span></td>
-                                                            <td>Network Security, Brute Force</td>
+                                                            <td>{ticket.tags || 'N/A'}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Event Type :</span></td>
-                                                            <td>Network Anomaly</td>
+                                                            <td>{ticket.event_type || 'N/A'}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Assigned By :</span></td>
-                                                            <td>Security Team Lead</td>
+                                                            <td>{ticket.assigned_by || 'N/A'}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Progress :</span></td>
-                                                            <td>In Progress</td>
+                                                            <td>{ticket.status || '-'}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Alert Status :</span></td>
-                                                            <td>Active</td>
+                                                            <td>{ticket.status || '-'}</td>
                                     </tr>
                                     <tr>
                                                             <td><span className="fw-medium">Alert Priority :</span></td>
-                                                            <td>High</td>
+                                                            <td>{ticket.priority || '-'}</td>
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">End Date :</span></td>
-                                                            <td>31, Dec 2024</td>
+                                                            <td>{ticket.end_date ? new Date(ticket.end_date).toLocaleDateString() : 'N/A'}</td>
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Assigned To :</span></td>
-                                                            <td>John Doe, Jane Smith</td>
+                                                            <td>{ticket.assigned_to || 'N/A'}</td>
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Last Updated Date :</span></td>
-                                                            <td>18, June 2024 10:30</td>
+                                                            <td>{ticket.updated_at ? new Date(ticket.updated_at).toLocaleString() : 'N/A'}</td>
                                     </tr>
                                 </SpkTables>
                             </div>

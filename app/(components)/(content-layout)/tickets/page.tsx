@@ -979,8 +979,30 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                         {col.key === 'updated_at' && (
                                                             <span>{ticket.updated_at ? new Date(ticket.updated_at).toLocaleDateString() : '-'}</span>
                                                         )}
+                                                        {col.key === 'alert_source' && (
+                                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                                {ticket.alert_source ? (
+                                                                    <img
+                                                                        src={ticket.alert_source}
+                                                                        alt="Source logo"
+                                                                        style={{ 
+                                                                            width: '78px', 
+                                                                            height: '38px', 
+                                                                            objectFit: 'contain',
+                                                                            maxWidth: '78px',
+                                                                            maxHeight: '38px'
+                                                                        }}
+                                                                        onError={(e) => {
+                                                                            e.currentTarget.style.display = 'none';
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-muted">-</span>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                         {/* Handle any other columns dynamically */}
-                                                        {!['id', 'title', 'status', 'priority', 'severity', 'tenant_id', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
+                                                        {!['id', 'title', 'status', 'priority', 'severity', 'alert_source', 'tenant_id', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
                                                             <span>
                                                                 {/* Check if this column contains severity-like values */}
                                                                 {(() => {
