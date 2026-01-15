@@ -22,6 +22,33 @@ interface MitreTactic {
     technique?: string;
 }
 
+interface ArtifactItem {
+    value: string;
+    score?: number;
+    color?: string;
+    detail?: string;
+    alerts?: number;
+}
+
+interface ArtifactsData {
+    ip_addresses?: ArtifactItem[];
+    urls?: ArtifactItem[];
+    domains?: ArtifactItem[];
+    hashes?: ArtifactItem[];
+}
+
+interface AssetItem {
+    value: string;
+    alerts?: number;
+    detail?: string;
+}
+
+interface ArtifactsAndAssets {
+    artifacts?: ArtifactsData;
+    assets?: AssetItem[];
+    users?: AssetItem[];
+}
+
 interface TicketData {
     id: number;
     title: string;
@@ -31,6 +58,7 @@ interface TicketData {
     tenant_id: string;
     description?: string;
     mitre?: MitreTactic[] | string;
+    artifacts_and_assets?: ArtifactsAndAssets | string;
     [key: string]: any;
 }
 
@@ -44,6 +72,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const [severity, setSeverity] = useState<'Low' | 'Medium' | 'High'>('High');
     const [mitreStages, setMitreStages] = useState<MitreTactic[]>([]);
     const [status, setStatus] = useState<string>('');
+    const [artifactsAndAssets, setArtifactsAndAssets] = useState<ArtifactsAndAssets | null>(null);
 
     const handleSeverityChange = async (eventKey: string | null) => {
         if (!ticket || !eventKey) return;
@@ -104,7 +133,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
 
     const getSeverityVariant = () => {
         if (severity === 'High') return 'danger';
-        if (severity === 'Medium') return 'warning';
+        if (severity === 'Medium') return 'orange';
         return 'success';
     };
 
@@ -232,6 +261,21 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             { name: 'Exfiltration', count: 0, active: false },
                             { name: 'Impact', count: 0, active: false }
                         ]);
+                    }
+                    
+                    // Parse artifacts_and_assets data
+                    if (data.artifacts_and_assets) {
+                        let artifactsData: ArtifactsAndAssets | null = null;
+                        if (typeof data.artifacts_and_assets === 'string') {
+                            try {
+                                artifactsData = JSON.parse(data.artifacts_and_assets);
+                            } catch (e) {
+                                console.error('Error parsing artifacts_and_assets data:', e);
+                            }
+                        } else if (typeof data.artifacts_and_assets === 'object') {
+                            artifactsData = data.artifacts_and_assets;
+                        }
+                        setArtifactsAndAssets(artifactsData);
                     }
                 }
             } catch (error) {
@@ -588,187 +632,210 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                             <div>
                                                         <h6 className="mb-2 fw-semibold fs-13">IP Addresses</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: '192.168.1.100', score: 85, color: 'danger', detail: 'Owner: Internal Network', alerts: 4 },
-                                                        { value: '10.0.0.45', score: 45, color: 'warning', detail: 'Owner: External IP', alerts: 2 },
-                                                        { value: '172.16.0.20', score: 25, color: 'success', detail: 'Owner: Private Range', alerts: 1 },
-                                                    ].map((ip, index) => (
+                                                    {artifactsAndAssets?.artifacts?.ip_addresses && artifactsAndAssets.artifacts.ip_addresses.length > 0 ? (
+                                                        artifactsAndAssets.artifacts.ip_addresses.map((ip, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1">{ip.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{ip.detail}</p>
+                                                                        {ip.detail && <p className="fs-11 text-muted mb-0">{ip.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className={`fs-14 fw-semibold text-${ip.color}`}>{ip.score}</div>
-                                                                            <div className="fs-10 text-muted">Score</div>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{ip.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {ip.score !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className={`fs-14 fw-semibold text-${ip.color || 'primary'}`}>{ip.score}</div>
+                                                                                <div className="fs-10 text-muted">Score</div>
+                                                                            </div>
+                                                                        )}
+                                                                        {ip.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{ip.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No IP addresses</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* URLs */}
                                             <div>
                                                 <h6 className="mb-2 fw-semibold fs-13">URLs</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: 'malicious-site.com/payload', score: 92, color: 'danger', detail: 'Signed by: Unknown Certificate', alerts: 6 },
-                                                        { value: 'suspicious-domain.net/api', score: 60, color: 'warning', detail: 'Signed by: Self-Signed Cert', alerts: 3 },
-                                                    ].map((url, index) => (
+                                                    {artifactsAndAssets?.artifacts?.urls && artifactsAndAssets.artifacts.urls.length > 0 ? (
+                                                        artifactsAndAssets.artifacts.urls.map((url, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1 text-break">{url.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{url.detail}</p>
+                                                                        {url.detail && <p className="fs-11 text-muted mb-0">{url.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className={`fs-14 fw-semibold text-${url.color}`}>{url.score}</div>
-                                                                            <div className="fs-10 text-muted">Score</div>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{url.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {url.score !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className={`fs-14 fw-semibold text-${url.color || 'primary'}`}>{url.score}</div>
+                                                                                <div className="fs-10 text-muted">Score</div>
+                                                                            </div>
+                                                                        )}
+                                                                        {url.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{url.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No URLs</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Domains */}
                                             <div>
                                                 <h6 className="mb-2 fw-semibold fs-13">Domains</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: 'evil-domain.com', score: 88, color: 'danger', detail: 'Registrar: Unknown, Created: 2023', alerts: 9 },
-                                                        { value: 'suspicious-site.net', score: 55, color: 'warning', detail: 'Registrar: GoDaddy, Created: 2022', alerts: 4 },
-                                                    ].map((domain, index) => (
+                                                    {artifactsAndAssets?.artifacts?.domains && artifactsAndAssets.artifacts.domains.length > 0 ? (
+                                                        artifactsAndAssets.artifacts.domains.map((domain, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1">{domain.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{domain.detail}</p>
+                                                                        {domain.detail && <p className="fs-11 text-muted mb-0">{domain.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className={`fs-14 fw-semibold text-${domain.color}`}>{domain.score}</div>
-                                                                            <div className="fs-10 text-muted">Score</div>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{domain.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {domain.score !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className={`fs-14 fw-semibold text-${domain.color || 'primary'}`}>{domain.score}</div>
+                                                                                <div className="fs-10 text-muted">Score</div>
+                                                                            </div>
+                                                                        )}
+                                                                        {domain.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{domain.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No domains</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Hashes */}
                                                 <div>
                                                 <h6 className="mb-2 fw-semibold fs-13">Hashes</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: 'a1b2c3d4e5f6...7890', score: 95, color: 'danger', detail: 'Type: SHA256, Size: 2.5MB', alerts: 11 },
-                                                        { value: 'f6e5d4c3b2a1...0987', score: 50, color: 'warning', detail: 'Type: MD5, Size: 1.2MB', alerts: 5 },
-                                                    ].map((hash, index) => (
+                                                    {artifactsAndAssets?.artifacts?.hashes && artifactsAndAssets.artifacts.hashes.length > 0 ? (
+                                                        artifactsAndAssets.artifacts.hashes.map((hash, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1 font-monospace">{hash.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{hash.detail}</p>
+                                                                        {hash.detail && <p className="fs-11 text-muted mb-0">{hash.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className={`fs-14 fw-semibold text-${hash.color}`}>{hash.score}</div>
-                                                                            <div className="fs-10 text-muted">Score</div>
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{hash.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {hash.score !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className={`fs-14 fw-semibold text-${hash.color || 'primary'}`}>{hash.score}</div>
+                                                                                <div className="fs-10 text-muted">Score</div>
+                                                                            </div>
+                                                                        )}
+                                                                        {hash.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{hash.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No hashes</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Assets */}
                                             <div>
                                                 <h6 className="mb-2 fw-semibold fs-13">Assets</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: 'Server-Web-01', alerts: 5, detail: 'Type: Web Server, Location: Data Center A' },
-                                                        { value: 'Workstation-Admin-02', alerts: 3, detail: 'Type: Workstation, Location: Office Floor 3' },
-                                                        { value: 'Router-Main-Gateway', alerts: 8, detail: 'Type: Network Device, Location: Network Room' },
-                                                    ].map((asset, index) => (
+                                                    {artifactsAndAssets?.assets && artifactsAndAssets.assets.length > 0 ? (
+                                                        artifactsAndAssets.assets.map((asset, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1">{asset.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{asset.detail}</p>
+                                                                        {asset.detail && <p className="fs-11 text-muted mb-0">{asset.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{asset.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {asset.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{asset.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No URLs</p>
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Users */}
                                             <div>
                                                 <h6 className="mb-2 fw-semibold fs-13">Users</h6>
                                                 <div className="d-flex flex-column gap-2">
-                                                    {[
-                                                        { value: 'john.doe@company.com', alerts: 12, detail: 'Role: Administrator, Department: IT' },
-                                                        { value: 'jane.smith@company.com', alerts: 7, detail: 'Role: Analyst, Department: Security' },
-                                                        { value: 'admin@company.com', alerts: 15, detail: 'Role: System Admin, Department: IT' },
-                                                    ].map((user, index) => (
+                                                    {artifactsAndAssets?.users && artifactsAndAssets.users.length > 0 ? (
+                                                        artifactsAndAssets.users.map((user, index) => (
                                                         <Card key={index} className="border custom-card mb-0">
                                                             <Card.Body className="py-3 px-3">
                                                                 <div className="d-flex justify-content-between align-items-start">
                                                                     <div className="flex-fill">
                                                                         <p className="fs-13 fw-medium mb-1 lh-1">{user.value}</p>
-                                                                        <p className="fs-11 text-muted mb-0">{user.detail}</p>
+                                                                        {user.detail && <p className="fs-11 text-muted mb-0">{user.detail}</p>}
                                                                     </div>
                                                                     <div className="d-flex align-items-center gap-2">
-                                                                        <div className="text-center">
-                                                                            <div className="fs-14 fw-semibold text-primary">{user.alerts}</div>
-                                                                            <div className="fs-10 text-muted">Alerts</div>
-                                                                        </div>
+                                                                        {user.alerts !== undefined && (
+                                                                            <div className="text-center">
+                                                                                <div className="fs-14 fw-semibold text-primary">{user.alerts}</div>
+                                                                                <div className="fs-10 text-muted">Alerts</div>
+                                                                            </div>
+                                                                        )}
                                                                         <i className="ri-add-line fs-18 text-muted"></i>
                                                                     </div>
                                                                 </div>
                                                             </Card.Body>
                                                         </Card>
-                                                    ))}
+                                                        ))
+                                                    ) : (
+                                                        <p className="fs-12 text-muted mb-0">No users</p>
+                                                    )}
                                                 </div>
                                             </div>
                                                 </div>

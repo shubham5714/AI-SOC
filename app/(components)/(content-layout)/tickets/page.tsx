@@ -316,7 +316,9 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                     'status_color': 'Status Color',
                     'priority_color': 'Priority Color',
                     'created_at': 'Created At',
-                    'updated_at': 'Updated At'
+                    'updated_at': 'Updated At',
+                    'ai_status': 'Investigation Status',
+                    'source_id': 'Source ID'
                 };
 
                 // Create column config for each field found in the tickets
@@ -953,8 +955,8 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                 Buttontype="button"
                                                                 Buttonvariant={
                                                                     (ticket.severity || '').toLowerCase() === 'critical' ? 'danger' :
-                                                                    (ticket.severity || '').toLowerCase() === 'high' ? 'warning' :
-                                                                    (ticket.severity || '').toLowerCase() === 'medium' ? 'info' :
+                                                                    (ticket.severity || '').toLowerCase() === 'high' ? 'danger' :
+                                                                    (ticket.severity || '').toLowerCase() === 'medium' ? 'orange' :
                                                                     (ticket.severity || '').toLowerCase() === 'low' ? 'success' :
                                                                     'secondary'
                                                                 }
@@ -1001,8 +1003,122 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                 )}
                                                             </div>
                                                         )}
+                                                        {col.key === 'mitre' && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '200px' }}>
+                                                                {(() => {
+                                                                    try {
+                                                                        let mitreData: any[] = [];
+                                                                        const mitreValue = ticket.mitre;
+                                                                        
+                                                                        if (typeof mitreValue === 'string') {
+                                                                            mitreData = JSON.parse(mitreValue);
+                                                                        } else if (Array.isArray(mitreValue)) {
+                                                                            mitreData = mitreValue;
+                                                                        }
+                                                                        
+                                                                        if (!mitreData || mitreData.length === 0) {
+                                                                            return <span className="text-muted">-</span>;
+                                                                        }
+                                                                        
+                                                                        // Ensure all 12 tactics are present
+                                                                        const allTactics = [
+                                                                            'Initial Access', 'Execution', 'Persistence', 'Privilege Escalation',
+                                                                            'Defense Evasion', 'Credential Access', 'Discovery', 'Lateral Movement',
+                                                                            'Collection', 'Command and Control', 'Exfiltration', 'Impact'
+                                                                        ];
+                                                                        
+                                                                        const mitreMap = new Map(mitreData.map((t: any) => [t.name, t]));
+                                                                        const completeMitreData = allTactics.map(name => {
+                                                                            const existing = mitreMap.get(name);
+                                                                            return existing || { name, count: 0, active: false };
+                                                                        });
+                                                                        
+                                                                        // Find all active tactics for display
+                                                                        const activeTactics = completeMitreData.filter(t => t.active);
+                                                                        
+                                                                        return (
+                                                                            <>
+                                                                                {/* Connected dots line */}
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', width: '100%', justifyContent: 'center' }}>
+                                                                                    {completeMitreData.map((phase, index) => (
+                                                                                        <React.Fragment key={phase.name}>
+                                                                                            <div
+                                                                                                style={{
+                                                                                                    width: phase.active ? '10px' : '6px',
+                                                                                                    height: phase.active ? '10px' : '6px',
+                                                                                                    borderRadius: '50%',
+                                                                                                    backgroundColor: phase.active ? '#dc3545' : '#6c757d',
+                                                                                                    border: phase.active ? '2px solid #dc3545' : '1px solid #6c757d',
+                                                                                                    flexShrink: 0
+                                                                                                }}
+                                                                                                title={phase.name}
+                                                                                            />
+                                                                                            {index < completeMitreData.length - 1 && (
+                                                                                                <div
+                                                                                                    style={{
+                                                                                                        width: '8px',
+                                                                                                        height: '1px',
+                                                                                                        backgroundColor: '#dee2e6',
+                                                                                                        flexShrink: 0
+                                                                                                    }}
+                                                                                                />
+                                                                                            )}
+                                                                                        </React.Fragment>
+                                                                                    ))}
+                                                                                </div>
+                                                                                {/* All active tactic names below */}
+                                                                                {activeTactics.length > 0 && (
+                                                                                    <span 
+                                                                                        className="fs-12 fw-medium text-center" 
+                                                                                        style={{ 
+                                                                                            color: '#dc3545',
+                                                                                            width: '100%',
+                                                                                            display: 'block',
+                                                                                            overflow: 'hidden',
+                                                                                            textOverflow: 'ellipsis',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}
+                                                                                        title={activeTactics.map(t => t.name).join(', ')}
+                                                                                    >
+                                                                                        {activeTactics.map(t => t.name).join(', ')}
+                                                                                    </span>
+                                                                                )}
+                                                                            </>
+                                                                        );
+                                                                    } catch (error) {
+                                                                        return <span className="text-muted">-</span>;
+                                                                    }
+                                                                })()}
+                                                            </div>
+                                                        )}
+                                                        {col.key === 'ai_status' && (
+                                                            <SpkButton 
+                                                                Buttontype="button"
+                                                                Buttonvariant={
+                                                                    (ticket.ai_status || '').toLowerCase() === 'queued' ? 'light' :
+                                                                    (ticket.ai_status || '').toLowerCase() === 'investigating' ? 'primary' :
+                                                                    (ticket.ai_status || '').toLowerCase() === 'completed' ? 'dark' :
+                                                                    'secondary'
+                                                                }
+                                                                Customclass={
+                                                                    (ticket.ai_status || '').toLowerCase() === 'investigating' 
+                                                                        ? 'btn-sm btn-loader' 
+                                                                        : 'btn-sm'
+                                                                }
+                                                                Style={{ minWidth: '120px', width: '120px' }}
+                                                            >
+                                                                {(ticket.ai_status || '').toLowerCase() === 'investigating' ? (
+                                                                    <>
+                                                                        <span className="me-2">{ticket.ai_status || '-'}</span>
+                                                                        <span className="loading"><i className="ri-loader-2-fill fs-16"></i></span>
+                                                                    </>
+                                                                ) : (
+                                                                    <span>{ticket.ai_status || '-'}</span>
+                                                                )}
+                                                            </SpkButton>
+                                                        )}
                                                         {/* Handle any other columns dynamically */}
-                                                        {!['id', 'title', 'status', 'priority', 'severity', 'alert_source', 'tenant_id', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
+                                                        {!['id', 'title', 'status', 'priority', 'severity', 'alert_source', 'mitre', 'ai_status', 'tenant_id', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
                                                             <span>
                                                                 {/* Check if this column contains severity-like values */}
                                                                 {(() => {
@@ -1015,8 +1131,8 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                                     Buttontype="button"
                                                                                     Buttonvariant={
                                                                                         lowerValue === 'critical' ? 'danger' :
-                                                                                        lowerValue === 'high' ? 'warning' :
-                                                                                        lowerValue === 'medium' ? 'info' :
+                                                                                        lowerValue === 'high' ? 'danger' :
+                                                                                        lowerValue === 'medium' ? 'orange' :
                                                                                         lowerValue === 'low' ? 'success' :
                                                                                         'secondary'
                                                                                     }
