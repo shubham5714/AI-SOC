@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import React, { Fragment, useContext, useEffect, useRef, useState } from 'react'
 import { Card, Col, Form, Row } from 'react-bootstrap';
-import { toast, ToastContainer } from 'react-toastify';
+import SpkToast from '@/shared/@spk-reusable-components/reusable-uiElements/spk-toast';
+import { ToastContainer } from 'react-bootstrap';
 import { LocalStorageBackup } from '@/shared/data/switcherdata/switcherdata';
 import { Initialload } from "@/shared/contextapi";
 import { useUpdateTenants } from '@/shared/contextapi/TenantContext';
@@ -27,6 +28,35 @@ const Page = () => {
     
     useEffect(() => {
         setMounted(true);
+        
+        // Restore MFA ticket from sessionStorage if it exists and MFA is not verified
+        const storedMfaTicket = sessionStorage.getItem('mfaTicket');
+        
+        if (storedMfaTicket && !isMfaVerified()) {
+            setMfaTicket(storedMfaTicket);
+        }
+        
+        // Listen for storage changes from other tabs (for MFA verification status)
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'mfaVerified' && event.newValue) {
+                try {
+                    const parsed = JSON.parse(event.newValue);
+                    if (parsed.verified && parsed.expiresAt && Date.now() <= parsed.expiresAt) {
+                        // MFA was verified in another tab and not expired, clear any pending MFA ticket
+                        setMfaTicket(null);
+                        sessionStorage.removeItem('mfaTicket');
+                    }
+                } catch (e) {
+                    // Invalid format, ignore
+                }
+            }
+        };
+        
+        window.addEventListener('storage', handleStorageChange);
+        
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
 
     useEffect(() => {
@@ -69,6 +99,32 @@ const Page = () => {
         isVerifying: false
     });
     
+    // Toast state management
+    const [toastState, setToastState] = useState<{
+        show: boolean;
+        type: 'success' | 'error' | 'info';
+        message: string;
+        title?: string;
+    }>({
+        show: false,
+        type: 'success',
+        message: '',
+        title: 'DRX'
+    });
+    
+    const showToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
+        setToastState({
+            show: true,
+            type,
+            message,
+            title: title || 'DRX'
+        });
+    };
+    
+    const hideToast = () => {
+        setToastState(prev => ({ ...prev, show: false }));
+    };
+    
     const { email, password } = data;
     
     const changeHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -78,12 +134,80 @@ const Page = () => {
 
     const router = useRouter();
 
+    // Helper function to check if MFA is verified and not expired (8 hours)
+    const isMfaVerified = (): boolean => {
+        try {
+            const mfaVerifiedData = localStorage.getItem('mfaVerified');
+            if (!mfaVerifiedData) return false;
+            
+            // Check if it's the new format with expiration
+            try {
+                const parsed = JSON.parse(mfaVerifiedData);
+                if (parsed.verified && parsed.expiresAt) {
+                    // Check if expired
+                    if (Date.now() > parsed.expiresAt) {
+                        // Expired - remove it
+                        localStorage.removeItem('mfaVerified');
+                        return false;
+                    }
+                    return true;
+                }
+            } catch (e) {
+                // Old format (just 'true') - treat as expired for security
+                localStorage.removeItem('mfaVerified');
+                return false;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Error checking MFA verification:', error);
+            return false;
+        }
+    };
+
+    // Helper function to set MFA as verified with 8-hour expiration
+    const setMfaVerified = (): void => {
+        const expiresAt = Date.now() + (8 * 60 * 60 * 1000); // 8 hours from now
+        localStorage.setItem('mfaVerified', JSON.stringify({
+            verified: true,
+            timestamp: Date.now(),
+            expiresAt: expiresAt
+        }));
+    };
+
     // If user is already authenticated, redirect away from login page
     useEffect(() => {
         const checkExistingSession = async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
+                    // Check if MFA is required and if it's been verified
+                    try {
+                        const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+                        
+                        if (!factorsError && factors && factors.totp && factors.totp.length > 0) {
+                            // User has MFA factors enrolled - check if MFA is verified and not expired
+                            if (!isMfaVerified()) {
+                                // MFA is required but not verified or expired - sign out and clear session
+                                console.log('MFA required but not verified or expired - signing out');
+                                await supabase.auth.signOut();
+                                localStorage.removeItem('mfaVerified');
+                                sessionStorage.removeItem('mfaTicket');
+                                setIsCheckingAuth(false);
+                                return;
+                            }
+                        }
+                    } catch (mfaCheckError) {
+                        console.error("Error checking MFA status:", mfaCheckError);
+                        // If we can't check MFA, sign out for security
+                        await supabase.auth.signOut();
+                        localStorage.removeItem('mfaVerified');
+                        sessionStorage.removeItem('mfaTicket');
+                        setIsCheckingAuth(false);
+                        return;
+                    }
+                    
+                    // MFA is either not required or verified - proceed to dashboard
                     router.replace("/dashboards/executive");
                     return;
                 }
@@ -123,6 +247,11 @@ const Page = () => {
                     }
                     
                     console.log('MFA verification successful:', verifiedData);
+                    
+                    // Mark MFA as verified in localStorage with 8-hour expiration and clear MFA ticket
+                    setMfaVerified();
+                    sessionStorage.removeItem('mfaTicket');
+                    setMfaTicket(null); // Clear from state as well
                     
                     // MFA verification successful, proceed with user data
                     const userId = verifiedData.user?.id;
@@ -167,21 +296,16 @@ const Page = () => {
                     }
                 } catch (mfaError) {
                     console.log('MFA verification failed:', mfaError);
+                    // Clear MFA verification status on failure
+                    localStorage.removeItem('mfaVerified');
                     throw mfaError;
                 }
 
-                toast.success('Login successful', {
-                    position: 'top-right',
-                    autoClose: 1500,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                });
+                showToast('success', 'Login successful');
                 
                 setTimeout(() => {
                     router.push("/dashboards/executive");
-                }, 1200);
+                }, 1500);
                 return;
             }
 
@@ -218,19 +342,17 @@ const Page = () => {
                             if (!challengeError && challenge) {
                                 console.log('MFA challenge created:', challenge.id);
                                 // Store the challenge ID and factor ID for verification
-                                setMfaTicket(JSON.stringify({
+                                const mfaTicketData = JSON.stringify({
                                     factorId: totpFactor.id,
                                     challengeId: challenge.id
-                                }));
+                                });
+                                setMfaTicket(mfaTicketData);
                                 
-                                toast.info('MFA required. Enter your 6-digit code from Google Authenticator.', {
-                    position: 'top-right',
-                                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                });
+                                // Store MFA ticket in sessionStorage and mark MFA as pending
+                                sessionStorage.setItem('mfaTicket', mfaTicketData);
+                                localStorage.removeItem('mfaVerified'); // Ensure MFA is not marked as verified
+                                
+                                showToast('info', 'MFA required. Enter your 6-digit code from Google Authenticator.');
                                 return;
                             } else {
                                 console.log('Failed to create MFA challenge:', challengeError);
@@ -239,14 +361,7 @@ const Page = () => {
                             console.log('No TOTP factors found - prompting for MFA enrollment');
                             // User has no MFA factors enrolled, prompt for enrollment
                             setShowMfaEnrollment(true);
-                            toast.info('MFA is required for your account. Please set up two-factor authentication.', {
-                                position: 'top-right',
-                                autoClose: 5000,
-                                hideProgressBar: false,
-                                closeOnClick: true,
-                                pauseOnHover: true,
-                                draggable: true,
-                            });
+                            showToast('info', 'MFA is required for your account. Please set up two-factor authentication.');
                             return;
                         }
                     } else {
@@ -257,7 +372,11 @@ const Page = () => {
                 }
             }
 
-            // Regular login successful
+            // Regular login successful (no MFA required)
+            // Clear any MFA verification status since MFA is not required for this user
+            localStorage.removeItem('mfaVerified');
+            sessionStorage.removeItem('mfaTicket');
+            
             const userId = signInData.user?.id;
             if (userId) {
                 // Fetch assigned tenants
@@ -300,14 +419,7 @@ const Page = () => {
                 }
             }
 
-                toast.success('Login successful', {
-                    position: 'top-right',
-                    autoClose: 1500,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                });
+                showToast('success', 'Login successful');
                 
                 // Show loading spinner while contexts are being processed
                 setIsProcessingLogin(true);
@@ -318,17 +430,10 @@ const Page = () => {
                     const redirectedFrom = urlParams.get('redirectedFrom');
                     const targetUrl = redirectedFrom || "/dashboards/executive";
                     router.push(targetUrl);
-                }, 1200);
+                }, 1500);
         } catch (err: any) {
             setError(err.message || 'Login failed');
-            toast.error('Invalid details', {
-                position: 'top-right',
-                autoClose: 1500,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-            });
+            showToast('error', 'Invalid details');
         }
     };
 
@@ -364,10 +469,7 @@ const Page = () => {
                     setMfaEnrollment(prev => ({ ...prev, isEnrolling: false }));
                     setShowMfaEnrollment(false);
                     
-                    toast.info('MFA required. Enter your 6-digit code from Google Authenticator.', {
-                        position: 'top-right',
-                        autoClose: 5000,
-                    });
+                    showToast('info', 'MFA required. Enter your 6-digit code from Google Authenticator.');
                     return;
                 }
             }
@@ -389,26 +491,17 @@ const Page = () => {
                 isEnrolling: false
             }));
             
-            toast.success('MFA enrollment started. Scan the QR code with your authenticator app.', {
-                position: 'top-right',
-                autoClose: 5000,
-            });
+            showToast('success', 'MFA enrollment started. Scan the QR code with your authenticator app.');
         } catch (error: any) {
             console.error('Error starting MFA enrollment:', error);
-            toast.error(error.message || 'Failed to start MFA enrollment', {
-                position: 'top-right',
-                autoClose: 3000,
-            });
+            showToast('error', error.message || 'Failed to start MFA enrollment');
             setMfaEnrollment(prev => ({ ...prev, isEnrolling: false }));
         }
     };
 
     const verifyMfaEnrollment = async () => {
         if (!mfaEnrollment.factorId || !otp) {
-            toast.error('Please enter the verification code', {
-                position: 'top-right',
-                autoClose: 3000,
-            });
+            showToast('error', 'Please enter the verification code');
             return;
         }
 
@@ -489,20 +582,14 @@ const Page = () => {
             setShowMfaEnrollment(false);
             setOtp('');
             
-            toast.success('MFA successfully enabled! Login successful.', {
-                position: 'top-right',
-                autoClose: 3000,
-            });
+            showToast('success', 'MFA successfully enabled! Login successful.');
             
             setTimeout(() => {
                 router.push("/dashboards/executive");
-            }, 1200);
+            }, 3000);
         } catch (error: any) {
             console.error('Error verifying MFA enrollment:', error);
-            toast.error(error.message || 'Invalid verification code', {
-                position: 'top-right',
-                autoClose: 3000,
-            });
+            showToast('error', error.message || 'Invalid verification code');
             setMfaEnrollment(prev => ({ ...prev, isVerifying: false }));
         }
     };
@@ -512,7 +599,24 @@ const Page = () => {
 
     return (
         <Fragment>
-            <ToastContainer />
+            <ToastContainer className="toast-container position-fixed top-0 end-0 p-3">
+                <SpkToast 
+                    show={toastState.show} 
+                    onClose={hideToast} 
+                    title={toastState.title || 'DRX'} 
+                    message={toastState.message}
+                    timestamp="just now"
+                    ToastHeader={true}
+                    toastClass="custom-toast"
+                    headerClass={
+                        toastState.type === 'success' ? 'text-fixed-white bg-primary' :
+                        toastState.type === 'error' ? 'text-fixed-white bg-danger' :
+                        'text-fixed-white bg-primary'
+                    }
+                    autohide={true}
+                    delay={toastState.type === 'success' ? 1500 : toastState.type === 'error' ? 3000 : 5000}
+                />
+            </ToastContainer>
             
             {/* Loading Spinner while processing login */}
             {isProcessingLogin && (

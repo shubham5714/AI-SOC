@@ -29,6 +29,8 @@ const Sidebar = () => {
 			sessionStorage.removeItem('userRole');
 			sessionStorage.removeItem('assignedTenants');
 			sessionStorage.removeItem('selectedTenantIds');
+			localStorage.removeItem('mfaVerified');
+			sessionStorage.removeItem('mfaTicket');
 			
 			// Sign out from Supabase
 			const { error } = await supabase.auth.signOut();
