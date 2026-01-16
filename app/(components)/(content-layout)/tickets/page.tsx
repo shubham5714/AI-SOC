@@ -148,6 +148,30 @@ const TicketsList: React.FC<TicketsListProps> = () => {
     // localStorage key for column settings
     const COLUMN_SETTINGS_KEY = 'tickets-column-settings';
 
+    // Define default selected columns with their order
+    const DEFAULT_SELECTED_COLUMNS = [
+        'id',
+        'created_at',
+        'severity',
+        'name',
+        'artifacts_and_assets',
+        'mitre',
+        'alert_source',
+        'tenant_name',
+        'ai_status',
+        'status',
+        'source_id',
+        'assigned_to'
+    ];
+
+    // Define additional available columns (not selected by default)
+    const ADDITIONAL_AVAILABLE_COLUMNS = [
+        'closure_category',
+        'closure_reason',
+        'updated_at',
+        'tenant_id'
+    ];
+
     // Save column configuration to localStorage
     const saveColumnSettings = useCallback((config: ColumnConfig[]) => {
         try {
@@ -303,41 +327,53 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                     });
                 });
 
-                const columns: ColumnConfig[] = [];
-                let order = 1;
 
                 // Define column mappings with user-friendly titles
                 const columnMappings: { [key: string]: string } = {
                     'id': 'ID',
                     'title': 'Title',
+                    'name': 'Name',
                     'status': 'Status',
                     'priority': 'Priority',
+                    'severity': 'Severity',
                     'tenant_id': 'Tenant ID',
+                    'tenant_name': 'Tenant Name',
                     'status_color': 'Status Color',
                     'priority_color': 'Priority Color',
                     'created_at': 'Created At',
                     'updated_at': 'Updated At',
                     'ai_status': 'Investigation Status',
-                    'source_id': 'Source ID'
+                    'source_id': 'Source ID',
+                    'alert_source': 'Alert Source',
+                    'mitre': 'MITRE ATT&CK',
+                    'assigned_to': 'Assigned To',
+                    'closure_category': 'Closure Category',
+                    'closure_reason': 'Closure Reason',
+                    'artifacts_and_assets': 'Scope'
                 };
 
-                // Create column config for each field found in the tickets
-                Array.from(allColumns).forEach((key: string) => {
-                    if (columnMappings[key]) {
+                const columns: ColumnConfig[] = [];
+
+                // Add default selected columns in order (only if they exist in database)
+                DEFAULT_SELECTED_COLUMNS.forEach((key, index) => {
+                    if (allColumns.has(key)) {
                         columns.push({
                             key: key,
-                            title: columnMappings[key],
-                            visible: ['title', 'status', 'priority', 'tenant_id'].includes(key), // Default visible columns
-                            order: order++
+                            title: columnMappings[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                            visible: true,
+                            order: index + 1
                         });
-                    } else {
-                        // Handle unknown columns by creating a friendly name
-                        const friendlyName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                });
+
+                // Add additional available columns (not selected by default, only if they exist in database)
+                ADDITIONAL_AVAILABLE_COLUMNS.forEach((key, index) => {
+                    if (allColumns.has(key)) {
                         columns.push({
                             key: key,
-                            title: friendlyName,
-                            visible: false, // Hide unknown columns by default
-                            order: order++
+                            title: columnMappings[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                            visible: false,
+                            order: DEFAULT_SELECTED_COLUMNS.length + index + 1
                         });
                     }
                 });
@@ -347,9 +383,15 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 // Try to load saved column settings, otherwise use default
                 const savedSettings = loadColumnSettings();
                 if (savedSettings && savedSettings.length > 0) {
-                    // Merge saved settings with available columns
+                    // Filter saved settings to only include predefined columns
+                    const validSavedSettings = savedSettings.filter(saved => 
+                        DEFAULT_SELECTED_COLUMNS.includes(saved.key) || 
+                        ADDITIONAL_AVAILABLE_COLUMNS.includes(saved.key)
+                    );
+                    
+                    // Merge saved settings with available columns (only predefined columns)
                     const mergedConfig = columns.map(col => {
-                        const saved = savedSettings.find(s => s.key === col.key);
+                        const saved = validSavedSettings.find(s => s.key === col.key);
                         return saved ? { ...col, visible: saved.visible, order: saved.order } : col;
                     });
                     setColumnConfig(mergedConfig);
@@ -932,6 +974,9 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                         {col.key === 'title' && (
                                                             <span className="fw-medium">{ticket.title}</span>
                                                         )}
+                                                        {col.key === 'name' && (
+                                                            <span className="fw-medium">{ticket.name || ticket.title || '-'}</span>
+                                                        )}
                                                         {col.key === 'status' && (
                                                             <SpkButton 
                                                                 Buttontype="button"
@@ -967,7 +1012,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             </SpkButton>
                                                         )}
                                                         {col.key === 'tenant_id' && (
-                                                            <span className="fw-medium">{ticket.tenant_id}</span>
+                                                            <span className="fw-medium">{ticket.tenant_id || '-'}</span>
+                                                        )}
+                                                        {col.key === 'tenant_name' && (
+                                                            <span className="fw-medium">{ticket.tenant_name || '-'}</span>
+                                                        )}
+                                                        {col.key === 'assigned_to' && (
+                                                            <span className="fw-medium">{ticket.assigned_to || '-'}</span>
                                                         )}
                                                         {col.key === 'status_color' && (
                                                             <span className="text-muted">{ticket.status_color || '-'}</span>
@@ -1117,8 +1168,74 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                 )}
                                                             </SpkButton>
                                                         )}
+                                                        {col.key === 'closure_category' && (
+                                                            <span className="fw-medium">{ticket.closure_category || '-'}</span>
+                                                        )}
+                                                        {col.key === 'closure_reason' && (
+                                                            <span className="text-muted">{ticket.closure_reason || '-'}</span>
+                                                        )}
+                                                        {col.key === 'artifacts_and_assets' && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                                {(() => {
+                                                                    try {
+                                                                        let artifactsData: any = null;
+                                                                        const artifactsValue = ticket.artifacts_and_assets;
+                                                                        
+                                                                        if (typeof artifactsValue === 'string') {
+                                                                            artifactsData = JSON.parse(artifactsValue);
+                                                                        } else if (typeof artifactsValue === 'object' && artifactsValue !== null) {
+                                                                            artifactsData = artifactsValue;
+                                                                        }
+                                                                        
+                                                                        if (!artifactsData) {
+                                                                            return (
+                                                                                <>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                        <i className="ri-user-line fs-16 text-primary"></i>
+                                                                                        <span className="fw-medium">0</span>
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                        <i className="ri-computer-line fs-16 text-info"></i>
+                                                                                        <span className="fw-medium">0</span>
+                                                                                    </div>
+                                                                                </>
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        const usersCount = Array.isArray(artifactsData.users) ? artifactsData.users.length : 0;
+                                                                        const assetsCount = Array.isArray(artifactsData.assets) ? artifactsData.assets.length : 0;
+                                                                        
+                                                                        return (
+                                                                            <>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <i className="ri-user-line fs-16 text-primary"></i>
+                                                                                    <span className="fw-medium">{usersCount}</span>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <i className="ri-computer-line fs-16 text-info"></i>
+                                                                                    <span className="fw-medium">{assetsCount}</span>
+                                                                                </div>
+                                                                            </>
+                                                                        );
+                                                                    } catch (error) {
+                                                                        return (
+                                                                            <>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <i className="ri-user-line fs-16 text-primary"></i>
+                                                                                    <span className="fw-medium">0</span>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <i className="ri-computer-line fs-16 text-info"></i>
+                                                                                    <span className="fw-medium">0</span>
+                                                                                </div>
+                                                                            </>
+                                                                        );
+                                                                    }
+                                                                })()}
+                                                            </div>
+                                                        )}
                                                         {/* Handle any other columns dynamically */}
-                                                        {!['id', 'title', 'status', 'priority', 'severity', 'alert_source', 'mitre', 'ai_status', 'tenant_id', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
+                                                        {!['id', 'title', 'name', 'status', 'priority', 'severity', 'alert_source', 'mitre', 'ai_status', 'tenant_id', 'tenant_name', 'assigned_to', 'source_id', 'closure_category', 'closure_reason', 'artifacts_and_assets', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
                                                             <span>
                                                                 {/* Check if this column contains severity-like values */}
                                                                 {(() => {
@@ -1361,11 +1478,21 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                             Buttontype="button" 
                             Customclass="btn btn-outline-secondary"
                             onClickfunc={() => {
-                                // Reset to default visible columns
-                                const resetConfig = columnConfig.map(col => ({
-                                    ...col,
-                                    visible: ['title', 'status', 'priority', 'tenant_id'].includes(col.key)
-                                }));
+                                // Reset to default selected columns with their order
+                                const resetConfig = columnConfig.map((col, index) => {
+                                    const isDefaultSelected = DEFAULT_SELECTED_COLUMNS.includes(col.key);
+                                    const defaultOrder = DEFAULT_SELECTED_COLUMNS.indexOf(col.key);
+                                    
+                                    return {
+                                        ...col,
+                                        visible: isDefaultSelected,
+                                        order: isDefaultSelected ? (defaultOrder + 1) : (DEFAULT_SELECTED_COLUMNS.length + index + 1)
+                                    };
+                                });
+                                
+                                // Sort by order to maintain proper sequence
+                                resetConfig.sort((a, b) => a.order - b.order);
+                                
                                 setColumnConfig(resetConfig);
                                 saveColumnSettings(resetConfig);
                             }}
