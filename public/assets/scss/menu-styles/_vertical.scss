@@ -93,12 +93,12 @@
   }
 
   .side-menu__item {
-    padding: 0.65rem 1.25rem;
+    padding: 0.85rem 1.25rem;
     position: relative;
     display: flex;
     align-items: center;
     text-decoration: none;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: variables.$menu-prime-color;
     font-weight: 400;
     border: 1px solid transparent;
@@ -128,8 +128,8 @@
       font-weight: 500;
     }
     svg.side-menu__icon  {
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
     }
   }
 
@@ -157,7 +157,7 @@
     &.child1,
     &.child2 {
       .side-menu__item {
-        padding: 0.45rem 1rem;
+        padding: 0.65rem 1rem;
       }
     }
   }
@@ -200,8 +200,8 @@
     white-space: nowrap;
     color: variables.$menu-prime-color;
     position: relative;
-    font-size: 0.85rem;
-    line-height: 1;
+    font-size: 0.95rem;
+    line-height: 1.3;
     vertical-align: middle;
     display: flex;
     align-items: center;
@@ -210,14 +210,14 @@
   .side-menu__icon {
     margin-inline-end: 0.75rem;
     line-height: 0;
-    font-size: 1rem;
+    font-size: 1.2rem;
     text-align: center;
     color: variables.$menu-prime-color;
     border-radius: variables.$default-radius;
   }
   svg.side-menu_icon {
-    width: 1rem;
-    height: 1rem;
+    width: 1.2rem;
+    height: 1.2rem;
   }
 
   .side-menu__angle {

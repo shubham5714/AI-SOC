@@ -51,18 +51,21 @@ interface SearchCondition {
 
 interface ParsedSearchQuery {
     conditions: SearchCondition[];
-    freeText: string[];
     logicalOperators: string[];
+    invalidFields: string[];
 }
 
 // Search query parser function
-const parseSearchQuery = (query: string): ParsedSearchQuery => {
+const parseSearchQuery = (query: string, allowedFields: string[]): ParsedSearchQuery => {
     const conditions: SearchCondition[] = [];
-    const freeText: string[] = [];
+    const invalidFields: string[] = [];
     
     if (!query.trim()) {
-        return { conditions, freeText, logicalOperators: [] };
+        return { conditions, logicalOperators: [], invalidFields };
     }
+    
+    // Create a set of allowed fields in lowercase for case-insensitive comparison
+    const allowedFieldsSet = new Set(allowedFields.map(f => f.toLowerCase()));
     
     // First, split by logical operators while preserving them
     const logicalSplit = query.split(/\s+(AND|OR)\s+/i);
@@ -76,7 +79,7 @@ const parseSearchQuery = (query: string): ParsedSearchQuery => {
     // Process each part
     const parts = logicalSplit.filter((_, index) => index % 2 === 0);
     
-    parts.forEach((part, index) => {
+    parts.forEach((part) => {
         part = part.trim();
         if (!part) return;
         
@@ -92,35 +95,46 @@ const parseSearchQuery = (query: string): ParsedSearchQuery => {
                 token = token.slice(1, -1);
             }
             
-            // Check for key:value pattern
+            // Check for key:value pattern - only field:value patterns are allowed
             const keyValueMatch = token.match(/^(-?)([a-zA-Z_][a-zA-Z0-9_]*):(.+)$/);
             if (keyValueMatch) {
                 const [, negation, field, value] = keyValueMatch;
                 const trimmedValue = value.trim();
+                const fieldLower = field.toLowerCase();
                 
-                if (negation) {
-                    // Handle negation (-key:value)
-                    conditions.push({
-                        field: field.toLowerCase(),
-                        operator: 'not.ilike',
-                        value: trimmedValue
-                    });
+                // Validate field against allowed fields
+                if (allowedFieldsSet.has(fieldLower)) {
+                    if (negation) {
+                        // Handle negation (-key:value)
+                        conditions.push({
+                            field: fieldLower,
+                            operator: 'not.ilike',
+                            value: trimmedValue
+                        });
+                    } else {
+                        // Handle equality (key:value)
+                        conditions.push({
+                            field: fieldLower,
+                            operator: 'ilike',
+                            value: trimmedValue
+                        });
+                    }
                 } else {
-                    // Handle equality (key:value)
-                    conditions.push({
-                        field: field.toLowerCase(),
-                        operator: 'ilike',
-                        value: trimmedValue
-                    });
+                    // Field is not in allowed list
+                    if (!invalidFields.includes(field)) {
+                        invalidFields.push(field);
+                    }
                 }
             } else {
-                // Free text search
-                freeText.push(token);
+                // Token doesn't match field:value pattern - treat as invalid
+                if (!invalidFields.includes(token)) {
+                    invalidFields.push(token);
+                }
             }
         });
     });
     
-    return { conditions, freeText, logicalOperators };
+    return { conditions, logicalOperators, invalidFields };
 };
 
 const TicketsList: React.FC<TicketsListProps> = () => {
@@ -147,6 +161,18 @@ const TicketsList: React.FC<TicketsListProps> = () => {
 
     // localStorage key for column settings
     const COLUMN_SETTINGS_KEY = 'tickets-column-settings';
+
+    // Define searchable fields for search functionality
+    const SEARCHABLE_FIELDS = [
+        'id',
+        'severity',
+        'name',
+        'status',
+        'tenant_name',
+        'source_id',
+        'assigned_to',
+        'ai_status'
+    ];
 
     // Define default selected columns with their order
     const DEFAULT_SELECTED_COLUMNS = [
@@ -417,17 +443,70 @@ const TicketsList: React.FC<TicketsListProps> = () => {
         }
     };
 
+    // Helper function to apply a search condition to a query
+    const applySearchCondition = (query: any, condition: SearchCondition, forOrString: boolean = false): any => {
+        if (condition.field === 'id') {
+            const idValue = parseInt(condition.value);
+            if (!isNaN(idValue)) {
+                if (forOrString) {
+                    if (condition.operator === 'ilike') {
+                        return `${condition.field}.eq.${idValue}`;
+                    }
+                    return null; // OR with negation for id not supported
+                }
+                if (condition.operator === 'ilike') {
+                    return query.eq(condition.field, idValue);
+                } else if (condition.operator === 'not.ilike') {
+                    return query.neq(condition.field, idValue);
+                }
+            }
+        } else {
+            if (forOrString) {
+                if (condition.operator === 'ilike') {
+                    return `${condition.field}.ilike.%${condition.value}%`;
+                }
+                return null; // OR with negation not supported in string format
+            }
+            if (condition.operator === 'ilike') {
+                return query.ilike(condition.field, `%${condition.value}%`);
+            } else if (condition.operator === 'not.ilike') {
+                return query.not(condition.field, 'ilike', `%${condition.value}%`);
+            }
+        }
+        return query;
+    };
+
     // Fetch tickets from Supabase with pagination and search
     const fetchTickets = useCallback(async (page: number = 1) => {
         try {
             setLoading(true);
             setSearchError('');
-            const pageSize = 5;
+            const pageSize = 50;
             const from = (page - 1) * pageSize;
             const to = from + pageSize - 1;
 
-            // Parse search query
-            const parsedQuery = parseSearchQuery(activeSearchQuery);
+            const allowedFields = SEARCHABLE_FIELDS;
+            const parsedQuery = parseSearchQuery(activeSearchQuery, allowedFields);
+
+            // Check for invalid fields or invalid search format
+            if (parsedQuery.invalidFields.length > 0) {
+                setSearchError(`Invalid search: ${parsedQuery.invalidFields.join(', ')}. Please use field:value format (e.g., status:Active). Allowed fields: ${allowedFields.join(', ')}`);
+                setTickets([]);
+                setTotalCount(0);
+                setTotalPages(1);
+                setLoading(false);
+                return;
+            }
+
+            // Require at least one valid condition
+            if (parsedQuery.conditions.length === 0 && activeSearchQuery.trim()) {
+                setSearchError(`Invalid search format. Please use field:value format (e.g., status:Active). Allowed fields: ${allowedFields.join(', ')}`);
+                setTickets([]);
+                setTotalCount(0);
+                setTotalPages(1);
+                setLoading(false);
+                return;
+            }
 
             // Build query with tenant and date range filters
             let query = supabase.from('tickets').select('*', { count: 'exact' });
@@ -454,44 +533,29 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 query = query.gte('created_at', startDate).lte('created_at', endDate);
             }
 
-            // Apply search conditions with proper logical operators
+            // Apply search conditions
             if (parsedQuery.conditions.length > 0) {
+                const isAndOperation = parsedQuery.logicalOperators.length === 0 || parsedQuery.logicalOperators.every(op => op === 'AND');
                 
-                // For AND operations (default), chain the conditions
-                if (parsedQuery.logicalOperators.length === 0 || parsedQuery.logicalOperators.every(op => op === 'AND')) {
+                if (isAndOperation) {
+                    // AND operations: chain conditions
                     parsedQuery.conditions.forEach(condition => {
-                        if (condition.operator === 'ilike') {
-                            query = query.ilike(condition.field, `%${condition.value}%`);
-                        } else if (condition.operator === 'not.ilike') {
-                            query = query.not(condition.field, 'ilike', `%${condition.value}%`);
-                        }
+                        query = applySearchCondition(query, condition);
                     });
                 } else {
-                    // For OR operations, we need to handle negation differently
-                    // Supabase doesn't support negation in OR string syntax
+                    // OR operations
                     const hasNegation = parsedQuery.conditions.some(c => c.operator === 'not.ilike');
                     
                     if (hasNegation) {
-                        // For OR queries with negation, we need to use a different approach
-                        // We'll use multiple separate queries and combine results
-                        
-                        // For now, let's use a simpler approach: convert to AND logic
-                        // This is a limitation of Supabase's current OR syntax
+                        // Convert to AND logic (Supabase limitation with OR + negation)
                         parsedQuery.conditions.forEach(condition => {
-                            if (condition.operator === 'ilike') {
-                                query = query.ilike(condition.field, `%${condition.value}%`);
-                            } else if (condition.operator === 'not.ilike') {
-                                query = query.not(condition.field, 'ilike', `%${condition.value}%`);
-                            }
+                            query = applySearchCondition(query, condition);
                         });
                     } else {
-                        // For OR operations without negation, use standard OR syntax
-                        const orConditions: string[] = [];
-                        parsedQuery.conditions.forEach(condition => {
-                            if (condition.operator === 'ilike') {
-                                orConditions.push(`${condition.field}.ilike.%${condition.value}%`);
-                            }
-                        });
+                        // Use OR syntax
+                        const orConditions = parsedQuery.conditions
+                            .map(condition => applySearchCondition(query, condition, true))
+                            .filter((condition): condition is string => condition !== null);
                         
                         if (orConditions.length > 0) {
                             query = query.or(orConditions.join(','));
@@ -500,11 +564,6 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 }
             }
 
-            // Apply free text search (search in title and other text fields)
-            if (parsedQuery.freeText.length > 0) {
-                const freeTextQuery = parsedQuery.freeText.join(' ');
-                query = query.or(`title.ilike.%${freeTextQuery}%,description.ilike.%${freeTextQuery}%`);
-            }
 
             // Get total count
             const { count, error: countError } = await query;
@@ -537,43 +596,29 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 dataQuery = dataQuery.gte('created_at', startDate).lte('created_at', endDate);
             }
 
-            // Apply same search conditions with proper logical operators
+            // Apply same search conditions
             if (parsedQuery.conditions.length > 0) {
-                // For AND operations (default), chain the conditions
-                if (parsedQuery.logicalOperators.length === 0 || parsedQuery.logicalOperators.every(op => op === 'AND')) {
+                const isAndOperation = parsedQuery.logicalOperators.length === 0 || parsedQuery.logicalOperators.every(op => op === 'AND');
+                
+                if (isAndOperation) {
+                    // AND operations: chain conditions
                     parsedQuery.conditions.forEach(condition => {
-                        if (condition.operator === 'ilike') {
-                            dataQuery = dataQuery.ilike(condition.field, `%${condition.value}%`);
-                        } else if (condition.operator === 'not.ilike') {
-                            dataQuery = dataQuery.not(condition.field, 'ilike', `%${condition.value}%`);
-                        }
+                        dataQuery = applySearchCondition(dataQuery, condition);
                     });
                 } else {
-                    // For OR operations, we need to handle negation differently
-                    // Supabase doesn't support negation in OR string syntax
+                    // OR operations
                     const hasNegation = parsedQuery.conditions.some(c => c.operator === 'not.ilike');
                     
                     if (hasNegation) {
-                        // For OR queries with negation, we need to use a different approach
-                        // We'll use multiple separate queries and combine results
-                        
-                        // For now, let's use a simpler approach: convert to AND logic
-                        // This is a limitation of Supabase's current OR syntax
+                        // Convert to AND logic (Supabase limitation with OR + negation)
                         parsedQuery.conditions.forEach(condition => {
-                            if (condition.operator === 'ilike') {
-                                dataQuery = dataQuery.ilike(condition.field, `%${condition.value}%`);
-                            } else if (condition.operator === 'not.ilike') {
-                                dataQuery = dataQuery.not(condition.field, 'ilike', `%${condition.value}%`);
-                            }
+                            dataQuery = applySearchCondition(dataQuery, condition);
                         });
                     } else {
-                        // For OR operations without negation, use standard OR syntax
-                        const orConditions: string[] = [];
-                        parsedQuery.conditions.forEach(condition => {
-                            if (condition.operator === 'ilike') {
-                                orConditions.push(`${condition.field}.ilike.%${condition.value}%`);
-                            }
-                        });
+                        // Use OR syntax
+                        const orConditions = parsedQuery.conditions
+                            .map(condition => applySearchCondition(dataQuery, condition, true))
+                            .filter((condition): condition is string => condition !== null);
                         
                         if (orConditions.length > 0) {
                             dataQuery = dataQuery.or(orConditions.join(','));
@@ -582,14 +627,9 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 }
             }
 
-            // Apply same free text search
-            if (parsedQuery.freeText.length > 0) {
-                const freeTextQuery = parsedQuery.freeText.join(' ');
-                dataQuery = dataQuery.or(`title.ilike.%${freeTextQuery}%,description.ilike.%${freeTextQuery}%`);
-            }
 
             const { data, error } = await dataQuery
-                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
                 .range(from, to);
 
             if (error) {
@@ -866,7 +906,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                         <Form.Control
                                             id="search-input"
                                             type="text"
-                                            placeholder="Search by field (e.g., status:Active, -priority:Low) or free text..."
+                                            placeholder="Search by field (e.g., status:Active, -severity:Low, status:Open AND severity:High)..."
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             onKeyPress={handleSearchKeyPress}
@@ -898,28 +938,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                     )}
                                 </Col>
                                 <Col md={4} className="d-flex align-items-end justify-content-end">
-                                    <div className="d-flex align-items-center gap-2">
-                                        {activeSearchQuery && (
-                                            <span className="badge bg-info me-2">
-                                                <i className="ri-search-line me-1"></i>
-                                                Searching: "{activeSearchQuery}"
-                                            </span>
-                                        )}
-                                        <SpkButton 
-                                            Buttonvariant="outline-secondary" 
-                                            Customclass="btn btn-sm btn-wave waves-light" 
-                                            onClickfunc={handleColumnSettingsShow}
-                                        >
-                                            <i className="ri-settings-3-line fw-medium align-middle me-1"></i> Column Settings
-                                        </SpkButton>
-                                    </div>
                                 </Col>
                             </Row>
                             
                             {/* Action Buttons */}
                             <Row className="mb-0">
                                 <Col md={12}>
-                                    <div className="d-flex gap-2">
+                                    <div className="d-flex gap-2 justify-content-between align-items-center">
                                         <SpkButton 
                                             Buttonvariant="outline-primary" 
                                             Customclass="btn btn-sm btn-wave waves-light rounded-pill" 
@@ -928,6 +953,14 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                         >
                                             <i className="ri-check-line fw-medium align-middle me-1"></i> Closure ({selectedTickets.size})
                                         </SpkButton>
+                                        <Button 
+                                            variant="outline-secondary" 
+                                            className="btn btn-sm" 
+                                            onClick={handleColumnSettingsShow}
+                                            title="Column Settings"
+                                        >
+                                            <i className="ri-settings-3-line"></i>
+                                        </Button>
                                     </div>
                                 </Col>
                             </Row>
@@ -961,7 +994,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                     />
                                                 </td>
                                                 {(visibleColumns || []).map((col) => (
-                                                    <td key={col.key}>
+                                                    <td key={col.key} style={col.key === 'name' ? { maxWidth: '300px' } : {}}>
                                                         {col.key === 'id' && (
                                                             <Link 
                                                                 href={`/tickets/details?id=${ticket.id}`}
@@ -975,7 +1008,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             <span className="fw-medium">{ticket.title}</span>
                                                         )}
                                                         {col.key === 'name' && (
-                                                            <span className="fw-medium">{ticket.name || ticket.title || '-'}</span>
+                                                            <span className="fw-medium" style={{ display: 'block', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ticket.name || ticket.title || '-'}>{ticket.name || ticket.title || '-'}</span>
                                                         )}
                                                         {col.key === 'status' && (
                                                             <SpkButton 
@@ -1584,7 +1617,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                     <div className="mb-4">
                         <h6 className="fw-medium mb-3">Search Syntax</h6>
                         <p className="text-muted mb-3">
-                            Use <code>field:value</code> for matches, <code>-field:value</code> for exclusions, or free text for general search.
+                            Use <code>field:value</code> for matches, <code>-field:value</code> for exclusions. Only columns defined in column settings can be used for searches. All searches must use the <code>field:value</code> format.
                         </p>
                         
                         <h6 className="fw-medium mb-3">Examples</h6>
@@ -1606,22 +1639,15 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                             <div className="col-md-6">
                                 <div className="border rounded p-3">
                                     <h6 className="text-success mb-2">AND Operation</h6>
-                                    <code>title:test AND -status:closed</code>
-                                    <p className="text-muted small mb-0">Title contains "test" and not closed</p>
+                                    <code>status:Open AND -severity:low</code>
+                                    <p className="text-muted small mb-0">Status is "Open" and not low severity</p>
                                 </div>
                             </div>
                             <div className="col-md-6">
                                 <div className="border rounded p-3">
                                     <h6 className="text-warning mb-2">OR Operation</h6>
-                                    <code>priority:high OR severity:critical</code>
-                                    <p className="text-muted small mb-0">High priority OR critical severity</p>
-                                </div>
-                            </div>
-                            <div className="col-md-12">
-                                <div className="border rounded p-3">
-                                    <h6 className="text-info mb-2">Free Text Search</h6>
-                                    <code>bug report</code>
-                                    <p className="text-muted small mb-0">Search in title and description fields</p>
+                                    <code>status:Open OR severity:critical</code>
+                                    <p className="text-muted small mb-0">Status is "Open" OR critical severity</p>
                                 </div>
                             </div>
                         </div>
@@ -1633,8 +1659,9 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                             <ul className="mb-0">
                                 <li>All searches are <strong>case-insensitive</strong></li>
                                 <li>Press <strong>Enter</strong> or click <strong>Search</strong> to execute</li>
+                                <li>All searches must use <code>field:value</code> format - free text search is not supported</li>
                                 <li>OR queries with negation fall back to AND logic due to Supabase limitations</li>
-                                <li>Available fields: <code>id</code>, <code>title</code>, <code>status</code>, <code>priority</code>, <code>severity</code>, <code>tenant_id</code>, etc.</li>
+                                <li>Available searchable fields: <code>{SEARCHABLE_FIELDS.join('</code>, <code>')}</code></li>
                             </ul>
                         </div>
                     </div>
