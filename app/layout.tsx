@@ -81,7 +81,7 @@ const RootLayout: React.FC<RootLayoutProps> = ({ children }) => {
       style={customstyles}
     >
       <head>
-        <title>Zeno NextJs App-Router Typescript React Bootstrap Admin Dashboard Template</title>
+        <title>DRX NextJs App-Router Typescript React Bootstrap Admin Dashboard Template</title>
         <meta name="keywords" content="admin dashboard design, dashboard admin template, dashboard nextjs, dashboard template, dashboard ui design, next js admin panel, next js dashboard, next js template, next js ts, next js typescript, next js ui framework, nextjs dashboard template, nextjs styled components, nextjs ui, typescript template" />
       </head>
       <body className={`${localVariable.body ? localVariable.body : ''}`}>

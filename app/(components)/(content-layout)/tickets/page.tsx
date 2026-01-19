@@ -1661,7 +1661,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                 <li>Press <strong>Enter</strong> or click <strong>Search</strong> to execute</li>
                                 <li>All searches must use <code>field:value</code> format - free text search is not supported</li>
                                 <li>OR queries with negation fall back to AND logic due to Supabase limitations</li>
-                                <li>Available searchable fields: <code>{SEARCHABLE_FIELDS.join('</code>, <code>')}</code></li>
+                                <li>Available searchable fields:
+                                    <ul className="mt-2 mb-0">
+                                        {SEARCHABLE_FIELDS.map((field, index) => (
+                                            <li key={index}><code>{field}</code></li>
+                                        ))}
+                                    </ul>
+                                </li>
                             </ul>
                         </div>
                     </div>
