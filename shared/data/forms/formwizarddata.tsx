@@ -735,7 +735,7 @@ export default function HorizontalNonLinearStepper() {
                     </React.Fragment>
                 ) : (
                     <React.Fragment>
-                        <Typography sx={{ mt: 2, mb: 1, py: 1 }}>
+                        <Typography component="div" sx={{ mt: 2, mb: 1, py: 1 }}>
                             {steps[activeStep].description}
                         </Typography>
                         <Box sx={{ display: 'flex', flexDirection: 'row', pt: 2 }}>
