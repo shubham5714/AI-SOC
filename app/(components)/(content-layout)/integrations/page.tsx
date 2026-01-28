@@ -15,6 +15,7 @@ interface IntegrationType {
     status: 'active' | 'inactive' | 'pending';
     statusColor: string;
     parameters: IntegrationParameter[];
+    modal_info?: string;
 }
 
 interface IntegrationParameter {
@@ -38,6 +39,9 @@ interface IntegrationInstance {
     tenant_id: string;
     tenant_name?: string;
     instance_name: string;
+    incident_type?: string;
+    classifier?: string;
+    mapper?: string;
     logo?: string;
     configuration: { [key: string]: any };
     status: 'active' | 'inactive' | 'inprogress';
@@ -151,7 +155,8 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                     configuredInstances: item.configured_instances,
                     status: item.status,
                     statusColor: item.status_color,
-                    parameters: item.parameters || []
+                    parameters: item.parameters || [],
+                    modal_info: item.modal_info || ''
                 })) || [];
                 setIntegrations(transformedData);
                 
@@ -248,7 +253,10 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
         setSelectedIntegration(integration);
         setFormData({
             ...instance.configuration,
-            instance_name: instance.instance_name
+            instance_name: instance.instance_name,
+            incident_type: instance.incident_type || '',
+            classifier: instance.classifier || '',
+            mapper: instance.mapper || ''
         });
         setFormErrors({});
         setShowEditInstanceModal(true);
@@ -271,7 +279,10 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
     const handleAddInstance = (integration: IntegrationType) => {
         setSelectedIntegration(integration);
         setFormData({
-            instance_name: `${integration.name} Instance`
+            instance_name: `${integration.name} Instance`,
+            incident_type: '',
+            classifier: '',
+            mapper: ''
         });
         setFormErrors({});
         setShowAddInstanceModal(true);
@@ -384,8 +395,8 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
 
         setIsSaving(true);
         try {
-            // Extract instance_name from formData and create configuration without it
-            const { instance_name, ...configuration } = formData;
+            // Extract instance_name, incident_type, classifier, mapper from formData and create configuration without them
+            const { instance_name, incident_type, classifier, mapper, ...configuration } = formData;
             
             // Save instance to Supabase
             const { data, error } = await supabase
@@ -397,6 +408,9 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                     name: selectedIntegration.name,
                     logo: selectedIntegration.logo,
                     instance_name: instance_name?.toString().trim() || `${selectedIntegration.name} Instance`,
+                    incident_type: incident_type?.toString().trim() || null,
+                    classifier: classifier?.toString().trim() || null,
+                    mapper: mapper?.toString().trim() || null,
                     configuration: configuration,
                     status: 'pending'
                 })
@@ -445,14 +459,17 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
 
         setIsUpdating(true);
         try {
-            // Extract instance_name from formData and create configuration without it
-            const { instance_name, ...configuration } = formData;
+            // Extract instance_name, incident_type, classifier, mapper from formData and create configuration without them
+            const { instance_name, incident_type, classifier, mapper, ...configuration } = formData;
             
             // Update instance in Supabase
             const { error } = await supabase
                 .from('integration_instances')
                 .update({
                     instance_name: instance_name?.toString().trim() || selectedInstance.instance_name,
+                    incident_type: incident_type?.toString().trim() || null,
+                    classifier: classifier?.toString().trim() || null,
+                    mapper: mapper?.toString().trim() || null,
                     configuration: configuration
                 })
                 .eq('id', selectedInstance.id);
@@ -779,7 +796,7 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
             </div>
 
             {/* Add Instance Modal */}
-            <Modal show={showAddInstanceModal} onHide={() => setShowAddInstanceModal(false)} size="lg">
+            <Modal show={showAddInstanceModal} onHide={() => setShowAddInstanceModal(false)} size="xl">
                 <Modal.Header closeButton>
                     <Modal.Title>
                         Add Instance - {selectedIntegration?.name} {selectedIntegration?.version}
@@ -787,56 +804,111 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 </Modal.Header>
                 <Modal.Body>
                     {selectedIntegration && (
-                        <Form>
-                            <Row>
-                                <Col md={12} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label>
-                                            Instance Name
-                                            <span className="text-danger ms-1">*</span>
-                                        </Form.Label>
-                                        <Form.Control
-                                            type="text"
-                                            value={formData.instance_name || ''}
-                                            onChange={(e) => handleFormChange('instance_name', e.target.value)}
-                                            placeholder={`${selectedIntegration.name} Instance`}
-                                            isInvalid={!!formErrors.instance_name}
-                                        />
-                                        {formErrors.instance_name && (
-                                            <Form.Control.Feedback type="invalid">
-                                                {formErrors.instance_name}
-                                            </Form.Control.Feedback>
-                                        )}
-                                        <Form.Text className="text-muted">
-                                            Enter a unique name for this integration instance
-                                        </Form.Text>
-                                    </Form.Group>
-                                </Col>
-                            </Row>
-                            <Row>
-                                {selectedIntegration.parameters?.map(param => (
-                                    <Col md={6} key={param.id} className="mb-3">
-                                        <Form.Group>
-                                            <Form.Label>
-                                                {param.label}
-                                                {param.required && <span className="text-danger ms-1">*</span>}
-                                            </Form.Label>
-                                            {renderParameterInput(param)}
-                                            {formErrors[param.id] && (
-                                                <Form.Control.Feedback type="invalid">
-                                                    {formErrors[param.id]}
-                                                </Form.Control.Feedback>
-                                            )}
-                                            {param.description && (
+                        <Row>
+                            <Col md={7}>
+                                <Form>
+                                    <Row>
+                                        <Col md={12} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>
+                                                    Instance Name
+                                                    <span className="text-danger ms-1">*</span>
+                                                </Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.instance_name || ''}
+                                                    onChange={(e) => handleFormChange('instance_name', e.target.value)}
+                                                    placeholder={`${selectedIntegration.name} Instance`}
+                                                    isInvalid={!!formErrors.instance_name}
+                                                />
+                                                {formErrors.instance_name && (
+                                                    <Form.Control.Feedback type="invalid">
+                                                        {formErrors.instance_name}
+                                                    </Form.Control.Feedback>
+                                                )}
                                                 <Form.Text className="text-muted">
-                                                    {param.description}
+                                                    Enter a unique name for this integration instance
                                                 </Form.Text>
-                                            )}
-                                        </Form.Group>
-                                    </Col>
-                                ))}
-                            </Row>
-                        </Form>
+                                            </Form.Group>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        {selectedIntegration.parameters?.map(param => (
+                                            <Col md={6} key={param.id} className="mb-3">
+                                                <Form.Group>
+                                                    <Form.Label>
+                                                        {param.label}
+                                                        {param.required && <span className="text-danger ms-1">*</span>}
+                                                    </Form.Label>
+                                                    {renderParameterInput(param)}
+                                                    {formErrors[param.id] && (
+                                                        <Form.Control.Feedback type="invalid">
+                                                            {formErrors[param.id]}
+                                                        </Form.Control.Feedback>
+                                                    )}
+                                                    {param.description && (
+                                                        <Form.Text className="text-muted">
+                                                            {param.description}
+                                                        </Form.Text>
+                                                    )}
+                                                </Form.Group>
+                                            </Col>
+                                        ))}
+                                    </Row>
+                                    <Row>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Incident Type</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.incident_type || ''}
+                                                    onChange={(e) => handleFormChange('incident_type', e.target.value)}
+                                                    placeholder="Enter incident type"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Classifier</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.classifier || ''}
+                                                    onChange={(e) => handleFormChange('classifier', e.target.value)}
+                                                    placeholder="Enter classifier"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Mapper</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.mapper || ''}
+                                                    onChange={(e) => handleFormChange('mapper', e.target.value)}
+                                                    placeholder="Enter mapper"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            </Col>
+                            <Col md={5}>
+                                <div className="border-start ps-4" style={{ minHeight: '100%' }}>
+                                    <h6 className="mb-3">Information</h6>
+                                    <div 
+                                        className="text-muted"
+                                        style={{ 
+                                            fontSize: '0.9rem',
+                                            lineHeight: '1.6',
+                                            whiteSpace: 'pre-wrap'
+                                        }}
+                                        dangerouslySetInnerHTML={{ 
+                                            __html: selectedIntegration.modal_info || '<p class="text-muted">No information available.</p>' 
+                                        }}
+                                    />
+                                </div>
+                            </Col>
+                        </Row>
                     )}
                 </Modal.Body>
                 <Modal.Footer>
@@ -861,7 +933,7 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
             </Modal>
 
             {/* Edit Instance Modal */}
-            <Modal show={showEditInstanceModal} onHide={() => setShowEditInstanceModal(false)} size="lg">
+            <Modal show={showEditInstanceModal} onHide={() => setShowEditInstanceModal(false)} size="xl">
                 <Modal.Header closeButton>
                     <Modal.Title>
                         Edit Instance - {selectedInstance?.instance_name}
@@ -869,56 +941,111 @@ const IntegrationsList: React.FC<IntegrationsListProps> = () => {
                 </Modal.Header>
                 <Modal.Body>
                     {selectedIntegration && (
-                        <Form>
-                            <Row>
-                                <Col md={12} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label>
-                                            Instance Name
-                                            <span className="text-danger ms-1">*</span>
-                                        </Form.Label>
-                                        <Form.Control
-                                            type="text"
-                                            value={formData.instance_name || ''}
-                                            onChange={(e) => handleFormChange('instance_name', e.target.value)}
-                                            placeholder="Enter instance name"
-                                            isInvalid={!!formErrors.instance_name}
-                                        />
-                                        {formErrors.instance_name && (
-                                            <Form.Control.Feedback type="invalid">
-                                                {formErrors.instance_name}
-                                            </Form.Control.Feedback>
-                                        )}
-                                        <Form.Text className="text-muted">
-                                            Enter a unique name for this integration instance
-                                        </Form.Text>
-                                    </Form.Group>
-                                </Col>
-                            </Row>
-                            <Row>
-                                {selectedIntegration.parameters?.map(param => (
-                                    <Col md={6} key={param.id} className="mb-3">
-                                        <Form.Group>
-                                            <Form.Label>
-                                                {param.label}
-                                                {param.required && <span className="text-danger ms-1">*</span>}
-                                            </Form.Label>
-                                            {renderParameterInput(param)}
-                                            {formErrors[param.id] && (
-                                                <Form.Control.Feedback type="invalid">
-                                                    {formErrors[param.id]}
-                                                </Form.Control.Feedback>
-                                            )}
-                                            {param.description && (
+                        <Row>
+                            <Col md={7}>
+                                <Form>
+                                    <Row>
+                                        <Col md={12} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>
+                                                    Instance Name
+                                                    <span className="text-danger ms-1">*</span>
+                                                </Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.instance_name || ''}
+                                                    onChange={(e) => handleFormChange('instance_name', e.target.value)}
+                                                    placeholder="Enter instance name"
+                                                    isInvalid={!!formErrors.instance_name}
+                                                />
+                                                {formErrors.instance_name && (
+                                                    <Form.Control.Feedback type="invalid">
+                                                        {formErrors.instance_name}
+                                                    </Form.Control.Feedback>
+                                                )}
                                                 <Form.Text className="text-muted">
-                                                    {param.description}
+                                                    Enter a unique name for this integration instance
                                                 </Form.Text>
-                                            )}
-                                        </Form.Group>
-                                    </Col>
-                                ))}
-                            </Row>
-                        </Form>
+                                            </Form.Group>
+                                        </Col>
+                                    </Row>
+                                    <Row>
+                                        {selectedIntegration.parameters?.map(param => (
+                                            <Col md={6} key={param.id} className="mb-3">
+                                                <Form.Group>
+                                                    <Form.Label>
+                                                        {param.label}
+                                                        {param.required && <span className="text-danger ms-1">*</span>}
+                                                    </Form.Label>
+                                                    {renderParameterInput(param)}
+                                                    {formErrors[param.id] && (
+                                                        <Form.Control.Feedback type="invalid">
+                                                            {formErrors[param.id]}
+                                                        </Form.Control.Feedback>
+                                                    )}
+                                                    {param.description && (
+                                                        <Form.Text className="text-muted">
+                                                            {param.description}
+                                                        </Form.Text>
+                                                    )}
+                                                </Form.Group>
+                                            </Col>
+                                        ))}
+                                    </Row>
+                                    <Row>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Incident Type</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.incident_type || ''}
+                                                    onChange={(e) => handleFormChange('incident_type', e.target.value)}
+                                                    placeholder="Enter incident type"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Classifier</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.classifier || ''}
+                                                    onChange={(e) => handleFormChange('classifier', e.target.value)}
+                                                    placeholder="Enter classifier"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label>Mapper</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    value={formData.mapper || ''}
+                                                    onChange={(e) => handleFormChange('mapper', e.target.value)}
+                                                    placeholder="Enter mapper"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            </Col>
+                            <Col md={5}>
+                                <div className="border-start ps-4" style={{ minHeight: '100%' }}>
+                                    <h6 className="mb-3">Information</h6>
+                                    <div 
+                                        className="text-muted"
+                                        style={{ 
+                                            fontSize: '0.9rem',
+                                            lineHeight: '1.6',
+                                            whiteSpace: 'pre-wrap'
+                                        }}
+                                        dangerouslySetInnerHTML={{ 
+                                            __html: selectedIntegration.modal_info || '<p class="text-muted">No information available.</p>' 
+                                        }}
+                                    />
+                                </div>
+                            </Col>
+                        </Row>
                     )}
                 </Modal.Body>
                 <Modal.Footer>
