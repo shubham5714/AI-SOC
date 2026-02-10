@@ -527,10 +527,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
             }
 
             // Apply date range filter
+            // Ensure end date includes the full day (23:59:59.999) to include all tickets created on that day
             if (dateRange && dateRange[0] && dateRange[1]) {
-                const startDate = dateRange[0].toISOString();
-                const endDate = dateRange[1].toISOString();
-                query = query.gte('created_at', startDate).lte('created_at', endDate);
+                const startDate = new Date(dateRange[0]);
+                startDate.setHours(0, 0, 0, 0); // Start of day
+                const endDate = new Date(dateRange[1]);
+                endDate.setHours(23, 59, 59, 999); // End of day to include all tickets created on that day
+                query = query.gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString());
             }
 
             // Apply search conditions
@@ -590,10 +593,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
             }
 
             // Apply same date range filter
+            // Ensure end date includes the full day (23:59:59.999) to include all tickets created on that day
             if (dateRange && dateRange[0] && dateRange[1]) {
-                const startDate = dateRange[0].toISOString();
-                const endDate = dateRange[1].toISOString();
-                dataQuery = dataQuery.gte('created_at', startDate).lte('created_at', endDate);
+                const startDate = new Date(dateRange[0]);
+                startDate.setHours(0, 0, 0, 0); // Start of day
+                const endDate = new Date(dateRange[1]);
+                endDate.setHours(23, 59, 59, 999); // End of day to include all tickets created on that day
+                dataQuery = dataQuery.gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString());
             }
 
             // Apply same search conditions

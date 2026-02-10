@@ -1,6 +1,5 @@
 "use client"
 // Ticket Details Page - Restructured based on wireframe
-import SpkBadge from "@/shared/@spk-reusable-components/reusable-uiElements/spk-badge";
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
 import SpkDropdown from "@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown";
 import SpkButtongroup from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttongroup";
@@ -49,6 +48,29 @@ interface ArtifactsAndAssets {
     users?: AssetItem[];
 }
 
+interface RelatedAlert {
+    time: string;
+    id: string;
+    name: string;
+    severity: string;
+}
+
+interface RelatedAlertsData {
+    [entityType: string]: {
+        [entityName: string]: RelatedAlert[];
+    };
+}
+
+interface AlertAnalysisSection {
+    type: 'paragraphs' | 'list';
+    content: string[];
+    heading: string;
+}
+
+interface AlertAnalysis {
+    sections: AlertAnalysisSection[];
+}
+
 interface TicketData {
     id: number;
     title: string;
@@ -59,6 +81,7 @@ interface TicketData {
     description?: string;
     mitre?: MitreTactic[] | string;
     artifacts_and_assets?: ArtifactsAndAssets | string;
+    alert_analysis?: AlertAnalysis | string;
     [key: string]: any;
 }
 
@@ -73,6 +96,8 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const [mitreStages, setMitreStages] = useState<MitreTactic[]>([]);
     const [status, setStatus] = useState<string>('');
     const [artifactsAndAssets, setArtifactsAndAssets] = useState<ArtifactsAndAssets | null>(null);
+    const [relatedAlertsData, setRelatedAlertsData] = useState<RelatedAlertsData>({});
+    const [alertAnalysis, setAlertAnalysis] = useState<AlertAnalysis | null>(null);
 
     const handleSeverityChange = async (eventKey: string | null) => {
         if (!ticket || !eventKey) return;
@@ -277,6 +302,23 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                         }
                         setArtifactsAndAssets(artifactsData);
                     }
+                    
+                    // Parse alert_analysis data
+                    if (data.alert_analysis) {
+                        let analysisData: AlertAnalysis | null = null;
+                        if (typeof data.alert_analysis === 'string') {
+                            try {
+                                analysisData = JSON.parse(data.alert_analysis);
+                            } catch (e) {
+                                console.error('Error parsing alert_analysis data:', e);
+                            }
+                        } else if (typeof data.alert_analysis === 'object') {
+                            analysisData = data.alert_analysis;
+                        }
+                        setAlertAnalysis(analysisData);
+                    } else {
+                        setAlertAnalysis(null);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching ticket:', error);
@@ -287,6 +329,89 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
 
         fetchTicket();
     }, [ticketId, selectedTenantIds, assignedTenants]);
+
+    // Initialize sample related alerts data
+    useEffect(() => {
+        const sampleData: RelatedAlertsData = {
+            users: {
+                shubham: [
+                    {
+                        time: "2026-02-06 10:22:42",
+                        id: "11",
+                        name: "GSOC-126-FW-Threat-Listed IP Initiated Inbound Connection",
+                        severity: "high"
+                    },
+                    {
+                        time: "2026-02-06 10:25:15",
+                        id: "12",
+                        name: "Multiple Failed Login Attempts",
+                        severity: "high"
+                    },
+                    {
+                        time: "2026-02-06 11:30:20",
+                        id: "13",
+                        name: "Unusual Access Pattern Detected",
+                        severity: "medium"
+                    },
+                    {
+                        time: "2026-02-06 12:15:45",
+                        id: "14",
+                        name: "Privilege Escalation Attempt",
+                        severity: "critical"
+                    }
+                ],
+                "john.doe@example.com": [
+                    {
+                        time: "2026-02-06 09:10:30",
+                        id: "15",
+                        name: "Data Exfiltration Attempt",
+                        severity: "high"
+                    },
+                    {
+                        time: "2026-02-06 14:20:10",
+                        id: "16",
+                        name: "Malware Detection",
+                        severity: "high"
+                    }
+                ],
+                "jane.smith@example.com": [
+                    {
+                        time: "2026-02-06 08:45:22",
+                        id: "17",
+                        name: "Suspicious Network Traffic",
+                        severity: "medium"
+                    }
+                ]
+            },
+            "ip_addresses": {
+                "192.168.1.100": [
+                    {
+                        time: "2026-02-06 10:30:00",
+                        id: "18",
+                        name: "Port Scan Detected",
+                        severity: "high"
+                    },
+                    {
+                        time: "2026-02-06 11:00:15",
+                        id: "19",
+                        name: "Brute Force Attack",
+                        severity: "critical"
+                    }
+                ],
+                "10.0.0.45": [
+                    {
+                        time: "2026-02-06 09:20:30",
+                        id: "20",
+                        name: "Suspicious Network Traffic",
+                        severity: "medium"
+                    }
+                ]
+            }
+        };
+        setRelatedAlertsData(sampleData);
+    }, []);
+
+
     // Static data for dropdowns
     const assignedToOptions = [
         { value: 'user1', label: 'John Doe' },
@@ -557,7 +682,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
                                     <Nav.Link as='button' eventKey='assets' className="px-4 py-2" role="tab" aria-selected="false">
-                                        Assets & Artifacts
+                                        Related Alerts
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
@@ -598,29 +723,33 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                 <Card.Title className="mb-0">Alert Analysis</Card.Title>
                                             </Card.Header>
                                             <Card.Body>
-                                                <h6 className="fw-medium">Alert Description</h6>
-                                                <p className="op-9">We are seeking a skilled Frontend Developer to join our dynamic team. In this role, you will be responsible for implementing visual elements that users see and interact with in web applications. You will work closely with designers and backend developers to bridge the gap between graphical design and technical implementation, ensuring an optimized and responsive user experience.</p>
-                                                <p className="mb-4 op-9">As a Frontend Developer, you will use your expertise in HTML, CSS, and JavaScript frameworks to translate UI/UX design wireframes into high-quality code. You will collaborate with cross-functional teams to deliver scalable and maintainable frontend solutions that meet business objectives and user needs.</p>
-
-                                                <h6 className="fw-medium">Key Responsibilities</h6>
-                                                <ListGroup as='ol' className="list-group border-0 list-unstyled list-group-numbered mb-3">
-                                                    <ListGroup.Item className="border-0 py-1">Develop responsive web pages and web applications based on provided designs and specifications.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Collaborate with UX/UI designers and backend developers to deliver seamless user interfaces.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Optimize application performance and ensure cross-browser compatibility.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Implement front-end components and libraries using modern frameworks such as React, Angular, or Vue.js.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Conduct thorough testing of user interfaces to identify and fix UI issues and bugs.</ListGroup.Item>
-                                                </ListGroup>
-                                                <h6 className="fw-medium">Requirements</h6>
-                                                <ListGroup as='ul' className="list-group border-0 list-unstyled list-group-numbered mb-3">
-                                                    <ListGroup.Item className="border-0 py-1">Bachelor's degree in Computer Science, Engineering, or a related field, or equivalent practical experience.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Proven experience as a Frontend Developer or similar role, with a strong portfolio demonstrating frontend development skills.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Proficiency in HTML5, CSS3, JavaScript, and frontend frameworks/libraries (e.g., React, Angular, Vue.js).</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Experience with version control systems (e.g., Git) and modern development workflows.</ListGroup.Item>
-                                                    <ListGroup.Item className="border-0 py-1">Understanding of responsive design principles and mobile-first approach.</ListGroup.Item>
-                            </ListGroup>
-                        </Card.Body>
-                    </Card>
-                </Col>
+                                                {alertAnalysis && alertAnalysis.sections && alertAnalysis.sections.length > 0 ? (
+                                                    alertAnalysis.sections.map((section, sectionIndex) => (
+                                                        <div key={sectionIndex} className={sectionIndex < alertAnalysis.sections.length - 1 ? 'mb-4' : ''}>
+                                                            <h6 className="fw-medium">{section.heading}</h6>
+                                                            {section.type === 'paragraphs' ? (
+                                                                section.content.map((paragraph, paraIndex) => (
+                                                                    <p key={paraIndex} className={paraIndex < section.content.length - 1 ? 'op-9 mb-2' : 'op-9 mb-0'}>
+                                                                        {paragraph}
+                                                                    </p>
+                                                                ))
+                                                            ) : section.type === 'list' ? (
+                                                                <ListGroup as='ul' className="list-group border-0 list-unstyled list-group-numbered mb-3">
+                                                                    {section.content.map((item, itemIndex) => (
+                                                                        <ListGroup.Item key={itemIndex} className="border-0 py-1">
+                                                                            {item}
+                                                                        </ListGroup.Item>
+                                                                    ))}
+                                                                </ListGroup>
+                                                            ) : null}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-muted mb-0">No alert analysis available.</p>
+                                                )}
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
                                     <Col xl={3}>
                     <Card className="custom-card">
                                             <Card.Header className="py-2">
@@ -898,6 +1027,94 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
             </Row>
                             </Tab.Pane>
                             <Tab.Pane eventKey='assets' className="pt-3 px-4 pb-4" role="tabpanel">
+                                <div className="d-flex flex-column gap-4">
+                                    {Object.keys(relatedAlertsData).length > 0 ? (
+                                        Object.entries(relatedAlertsData).map(([entityType, entities]) => (
+                                            <div key={entityType} className="d-flex flex-column gap-3">
+                                                {/* Entity Type Header */}
+                                                <div className="d-flex align-items-center justify-content-between mb-2">
+                                                    <h5 className="fw-semibold mb-0 related-alerts-text">
+                                                        {entityType === 'ip_addresses' ? 'IP Addresses' : 
+                                                         entityType.replace('_', ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                                                    </h5>
+                                                    <SpkButton 
+                                                        Buttontype="button"
+                                                        Buttonvariant="dark"
+                                                        Customclass="btn-sm"
+                                                        Style={{ minWidth: '100px', width: '100px' }}
+                                                    >
+                                                        {Object.keys(entities).length} {Object.keys(entities).length === 1 ? 'Entity' : 'Entities'}
+                                                    </SpkButton>
+                                                </div>
+
+                                                {/* Entities and their alerts */}
+                                                {Object.entries(entities).map(([entityName, alerts]) => (
+                                                    <div key={entityName} className="d-flex flex-column gap-2">
+                                                        {/* Entity Name Header */}
+                                                        <div className="d-flex align-items-center justify-content-between mb-2">
+                                                            <h6 className="fw-medium mb-0 related-alerts-text-secondary">
+                                                                <i className="ri-user-line me-2"></i>
+                                                                {entityName}
+                                                            </h6>
+                                                            <SpkButton 
+                                                                Buttontype="button"
+                                                                Buttonvariant="dark"
+                                                                Customclass="btn-sm"
+                                                                Style={{ minWidth: '100px', width: '100px' }}
+                                                            >
+                                                                {alerts.length} Alert{alerts.length !== 1 ? 's' : ''}
+                                                            </SpkButton>
+                                                        </div>
+
+                                                        {/* Alerts Cards for this entity - Two Column Split View */}
+                                                        {alerts.length > 0 ? (
+                                                            <Row className="ms-4">
+                                                                {alerts.map((alert, index) => (
+                                                                    <Col key={alert.id} md={6} className="mb-2">
+                                                                        <Card className="custom-card mb-0" style={{ 
+                                                                            borderLeft: alert.severity === 'critical' ? '4px solid #dc3545' : 
+                                                                                      alert.severity === 'high' ? '4px solid #dc3545' : 
+                                                                                      alert.severity === 'medium' ? '4px solid #0dcaf0' : 
+                                                                                      '4px solid #6c757d',
+                                                                            borderTop: '1px solid #9ca3af',
+                                                                            borderRight: '1px solid #9ca3af',
+                                                                            borderBottom: '1px solid #9ca3af'
+                                                                        }}>
+                                                                            <Card.Body className="p-3">
+                                                                                <div className="d-flex flex-column gap-2">
+                                                                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                                                                        <SpkButton 
+                                                                                            Buttontype="button"
+                                                                                            Buttonvariant="primary"
+                                                                                            Customclass="btn-sm"
+                                                                                        >
+                                                                                            ID: {alert.id}
+                                                                                        </SpkButton>
+                                                                                        <span className="text-muted fs-12">{alert.time}</span>
+                                                                                    </div>
+                                                                                    <h6 className="fw-semibold mb-0 related-alerts-text" style={{ fontSize: '0.95rem', lineHeight: '1.4' }}>{alert.name}</h6>
+                                                                                </div>
+                                                                            </Card.Body>
+                                                                        </Card>
+                                                                    </Col>
+                                                                ))}
+                                                            </Row>
+                                                        ) : (
+                                                            <div className="ms-4 text-muted fs-13 py-2">
+                                                                No alerts found for this entity
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-5">
+                                            <i className="ri-inbox-line fs-48 text-muted mb-3 d-block"></i>
+                                            <p className="text-muted mb-0">No related alerts data available</p>
+                                        </div>
+                                    )}
+                                </div>
                             </Tab.Pane>
                             <Tab.Pane eventKey='logs' className="pt-3 px-4 pb-4" role="tabpanel">
                                 <div className="d-flex flex-column gap-3">
@@ -987,6 +1204,20 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                     padding-top: 0.15rem !important;
                     padding-bottom: 0.15rem !important;
                     line-height: 1.3 !important;
+                }
+                /* Related Alerts Text Colors - Light Mode (default) */
+                .related-alerts-text {
+                    color: #000 !important;
+                }
+                .related-alerts-text-secondary {
+                    color: #333 !important;
+                }
+                /* Related Alerts Text Colors - Dark Mode */
+                [data-theme-mode="dark"] .related-alerts-text {
+                    color: #fff !important;
+                }
+                [data-theme-mode="dark"] .related-alerts-text-secondary {
+                    color: rgba(255, 255, 255, 0.7) !important;
                 }
             `}} />
         </Fragment>
