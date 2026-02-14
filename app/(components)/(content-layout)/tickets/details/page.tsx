@@ -1,6 +1,7 @@
 "use client"
 // Ticket Details Page - Restructured based on wireframe
 import SpkButton from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttons";
+import SpkBadge from "@/shared/@spk-reusable-components/reusable-uiElements/spk-badge";
 import SpkDropdown from "@/shared/@spk-reusable-components/reusable-uiElements/spk-dropdown";
 import SpkButtongroup from "@/shared/@spk-reusable-components/reusable-uiElements/spk-buttongroup";
 import SpkSelect from "@/shared/@spk-reusable-components/reusable-plugins/spk-reactselect";
@@ -9,8 +10,8 @@ import Seo from "@/shared/layouts-components/seo/seo";
 import { supabase } from "@/shared/lib/supabase";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
 import { useSearchParams } from "next/navigation";
-import React, { Fragment, useState, useEffect } from "react";
-import { Card, Col, Dropdown, ListGroup, Nav, Row, Tab, Spinner } from "react-bootstrap";
+import React, { Fragment, useState, useEffect, useCallback } from "react";
+import { Card, Col, Dropdown, ListGroup, Nav, Row, Tab, Spinner, Modal, Form } from "react-bootstrap";
 
 interface TicketDetailsProps { }
 
@@ -53,6 +54,8 @@ interface RelatedAlert {
     id: string;
     name: string;
     severity: string;
+    status?: string;
+    closure_category?: string;
 }
 
 interface RelatedAlertsData {
@@ -71,6 +74,10 @@ interface AlertAnalysis {
     sections: AlertAnalysisSection[];
 }
 
+interface AlertFields {
+    [key: string]: string | number | null | undefined;
+}
+
 interface TicketData {
     id: number;
     title: string;
@@ -82,8 +89,55 @@ interface TicketData {
     mitre?: MitreTactic[] | string;
     artifacts_and_assets?: ArtifactsAndAssets | string;
     alert_analysis?: AlertAnalysis | string;
+    alert_fields?: AlertFields | string;
+    related_alerts?: RelatedAlertsData | string;
     [key: string]: any;
 }
+
+// Normalize related alerts data from database format to display format
+const normalizeRelatedAlerts = (data: any): RelatedAlertsData => {
+    const normalized: RelatedAlertsData = {};
+    
+    // Iterate through each entity type (ips, urls, users, assets, hashes, domains)
+    Object.keys(data).forEach((entityType) => {
+        const entities = data[entityType];
+        if (entities && typeof entities === 'object') {
+            normalized[entityType] = {};
+            
+            // Iterate through each entity name
+            Object.keys(entities).forEach((entityName) => {
+                const alerts = entities[entityName];
+                if (Array.isArray(alerts) && alerts.length > 0) {
+                    normalized[entityType][entityName] = alerts.map((alert: any) => {
+                        // Normalize time format (ISO to display format)
+                        let timeStr = alert.time || '';
+                        if (timeStr.includes('T')) {
+                            // Convert ISO format (2026-02-13T15:31:32) to display format (2026-02-13 15:31:32)
+                            timeStr = timeStr.replace('T', ' ').split('.')[0];
+                        }
+                        
+                        // Normalize severity to lowercase
+                        const severityStr = (alert.severity || '').toLowerCase();
+                        
+                        // Normalize closure_category (null to empty string)
+                        const closureCategory = alert.closure_category || '';
+                        
+                        return {
+                            time: timeStr,
+                            id: String(alert.id || ''),
+                            name: alert.name || '',
+                            severity: severityStr,
+                            status: alert.status || '',
+                            closure_category: closureCategory
+                        };
+                    });
+                }
+            });
+        }
+    });
+    
+    return normalized;
+};
 
 const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const searchParams = useSearchParams();
@@ -98,6 +152,15 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const [artifactsAndAssets, setArtifactsAndAssets] = useState<ArtifactsAndAssets | null>(null);
     const [relatedAlertsData, setRelatedAlertsData] = useState<RelatedAlertsData>({});
     const [alertAnalysis, setAlertAnalysis] = useState<AlertAnalysis | null>(null);
+    const [alertFields, setAlertFields] = useState<AlertFields | null>(null);
+    const [assignedToUsers, setAssignedToUsers] = useState<Array<{ value: string; label: string }>>([]);
+    const [selectedAssignedTo, setSelectedAssignedTo] = useState<{ value: string; label: string } | null>(null);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [showClosureModal, setShowClosureModal] = useState(false);
+    const [closureForm, setClosureForm] = useState({
+        category: '',
+        reason: ''
+    });
 
     const handleSeverityChange = async (eventKey: string | null) => {
         if (!ticket || !eventKey) return;
@@ -171,7 +234,21 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         if (!ticket || !eventKey) return;
 
         const newStatus = eventKey === 'open' ? 'open' : 'closed';
-        await handleStatusChange({ value: newStatus });
+        
+        // If closing the ticket (or already closed and user wants to edit), show closure modal
+        if (newStatus === 'closed') {
+            // If ticket is already closed, populate form with existing values
+            if (ticket.status === 'closed') {
+                setClosureForm({
+                    category: ticket.closure_category || '',
+                    reason: ticket.closure_reason || ''
+                });
+            }
+            setShowClosureModal(true);
+        } else {
+            // If opening, just update status directly
+            await handleStatusChange({ value: newStatus });
+        }
     };
 
     // Fetch ticket data from Supabase
@@ -232,6 +309,21 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                         } else {
                             setSeverity('Low');
                         }
+                    }
+                    
+                    // Set initial assigned_to value
+                    if (data.assigned_to) {
+                        setSelectedAssignedTo({ value: data.assigned_to, label: data.assigned_to });
+                    } else {
+                        setSelectedAssignedTo(null);
+                    }
+                    
+                    // Set initial closure form values if ticket is closed
+                    if (data.status === 'closed') {
+                        setClosureForm({
+                            category: data.closure_category || '',
+                            reason: data.closure_reason || ''
+                        });
                     }
 
                     // Parse MITRE data
@@ -319,6 +411,53 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                     } else {
                         setAlertAnalysis(null);
                     }
+                    
+                    // Parse alert_fields data
+                    if (data.alert_fields) {
+                        let fieldsData: AlertFields | null = null;
+                        if (typeof data.alert_fields === 'string') {
+                            try {
+                                const parsed = JSON.parse(data.alert_fields);
+                                // Only set if parsed result is an object with keys
+                                if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                                    fieldsData = parsed;
+                                } else {
+                                    fieldsData = null;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing alert_fields data:', e);
+                                fieldsData = null;
+                            }
+                        } else if (typeof data.alert_fields === 'object' && Object.keys(data.alert_fields).length > 0) {
+                            fieldsData = data.alert_fields;
+                        } else {
+                            fieldsData = null;
+                        }
+                        setAlertFields(fieldsData);
+                    } else {
+                        setAlertFields(null);
+                    }
+                    
+                    // Parse related_alerts data
+                    if (data.related_alerts) {
+                        let relatedAlertsData: RelatedAlertsData = {};
+                        if (typeof data.related_alerts === 'string') {
+                            try {
+                                const parsed = JSON.parse(data.related_alerts);
+                                if (parsed && typeof parsed === 'object') {
+                                    // Normalize the data structure
+                                    relatedAlertsData = normalizeRelatedAlerts(parsed);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing related_alerts data:', e);
+                            }
+                        } else if (typeof data.related_alerts === 'object') {
+                            relatedAlertsData = normalizeRelatedAlerts(data.related_alerts);
+                        }
+                        setRelatedAlertsData(relatedAlertsData);
+                    } else {
+                        setRelatedAlertsData({});
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching ticket:', error);
@@ -330,94 +469,99 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         fetchTicket();
     }, [ticketId, selectedTenantIds, assignedTenants]);
 
-    // Initialize sample related alerts data
-    useEffect(() => {
-        const sampleData: RelatedAlertsData = {
-            users: {
-                shubham: [
-                    {
-                        time: "2026-02-06 10:22:42",
-                        id: "11",
-                        name: "GSOC-126-FW-Threat-Listed IP Initiated Inbound Connection",
-                        severity: "high"
-                    },
-                    {
-                        time: "2026-02-06 10:25:15",
-                        id: "12",
-                        name: "Multiple Failed Login Attempts",
-                        severity: "high"
-                    },
-                    {
-                        time: "2026-02-06 11:30:20",
-                        id: "13",
-                        name: "Unusual Access Pattern Detected",
-                        severity: "medium"
-                    },
-                    {
-                        time: "2026-02-06 12:15:45",
-                        id: "14",
-                        name: "Privilege Escalation Attempt",
-                        severity: "critical"
-                    }
-                ],
-                "john.doe@example.com": [
-                    {
-                        time: "2026-02-06 09:10:30",
-                        id: "15",
-                        name: "Data Exfiltration Attempt",
-                        severity: "high"
-                    },
-                    {
-                        time: "2026-02-06 14:20:10",
-                        id: "16",
-                        name: "Malware Detection",
-                        severity: "high"
-                    }
-                ],
-                "jane.smith@example.com": [
-                    {
-                        time: "2026-02-06 08:45:22",
-                        id: "17",
-                        name: "Suspicious Network Traffic",
-                        severity: "medium"
-                    }
-                ]
-            },
-            "ip_addresses": {
-                "192.168.1.100": [
-                    {
-                        time: "2026-02-06 10:30:00",
-                        id: "18",
-                        name: "Port Scan Detected",
-                        severity: "high"
-                    },
-                    {
-                        time: "2026-02-06 11:00:15",
-                        id: "19",
-                        name: "Brute Force Attack",
-                        severity: "critical"
-                    }
-                ],
-                "10.0.0.45": [
-                    {
-                        time: "2026-02-06 09:20:30",
-                        id: "20",
-                        name: "Suspicious Network Traffic",
-                        severity: "medium"
-                    }
-                ]
+    // Fetch users from user_tenants filtered by assignedTenants
+    const fetchAssignedToUsers = useCallback(async () => {
+        if (!assignedTenants || assignedTenants.length === 0) {
+            setAssignedToUsers([]);
+            return;
+        }
+
+        try {
+            setLoadingUsers(true);
+            const tenantIds = assignedTenants.map(t => t.id);
+
+            // Fetch users from user_tenants where tenant_id matches assignedTenants
+            const { data: userTenantsData, error: userTenantsError } = await supabase
+                .from('user_tenants')
+                .select('username')
+                .in('tenant_id', tenantIds);
+
+            if (userTenantsError) {
+                console.error('Error fetching user tenants:', userTenantsError);
+                setAssignedToUsers([]);
+                return;
             }
-        };
-        setRelatedAlertsData(sampleData);
-    }, []);
+
+            if (!userTenantsData || userTenantsData.length === 0) {
+                setAssignedToUsers([]);
+                return;
+            }
+
+            // Get unique usernames - filter out null, undefined, and empty strings
+            const uniqueUsernames = [...new Set(
+                userTenantsData
+                    .map(ut => ut.username)
+                    .filter(username => username && typeof username === 'string' && username.trim() !== '')
+            )];
+
+            // Map to options format
+            const users = uniqueUsernames.map(username => ({
+                value: username,
+                label: username
+            }));
+
+            setAssignedToUsers(users);
+        } catch (error) {
+            console.error('Error fetching assigned to users:', error);
+            setAssignedToUsers([]);
+        } finally {
+            setLoadingUsers(false);
+        }
+    }, [assignedTenants]);
+
+    // Fetch users when assignedTenants changes
+    useEffect(() => {
+        if (assignedTenants && assignedTenants.length > 0) {
+            fetchAssignedToUsers();
+        } else {
+            setAssignedToUsers([]);
+        }
+    }, [assignedTenants, fetchAssignedToUsers]);
 
 
-    // Static data for dropdowns
-    const assignedToOptions = [
-        { value: 'user1', label: 'John Doe' },
-        { value: 'user2', label: 'Jane Smith' },
-        { value: 'user3', label: 'Mike Johnson' },
-    ];
+    // Handle assigned to change
+    const handleAssignedToChange = async (selectedOption: any) => {
+        if (!ticket || !selectedOption) return;
+
+        const selectedUsername = selectedOption.value;
+        const previousOption = ticket.assigned_to 
+            ? assignedToUsers.find(u => u.value === ticket.assigned_to) || null 
+            : null;
+        
+        setSelectedAssignedTo(selectedOption);
+
+        try {
+            // Update assigned_to in Supabase
+            const { error } = await supabase
+                .from('tickets')
+                .update({ assigned_to: selectedUsername, updated_at: new Date().toISOString() })
+                .eq('id', ticket.id)
+                .eq('tenant_id', ticket.tenant_id);
+
+            if (error) {
+                console.error('Error updating assigned_to:', error);
+                setSelectedAssignedTo(previousOption);
+                alert('Failed to update assigned to. Please try again.');
+            } else {
+                // Update local ticket state
+                setTicket({ ...ticket, assigned_to: selectedUsername, updated_at: new Date().toISOString() });
+            }
+        } catch (error) {
+            console.error('Error updating assigned_to:', error);
+            setSelectedAssignedTo(previousOption);
+            alert('Failed to update assigned to. Please try again.');
+        }
+    };
 
     const statusOptions = [
         { value: 'open', label: 'Open' },
@@ -452,6 +596,66 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
             console.error('Error updating status:', error);
             setStatus(ticket.status);
             alert('Failed to update status. Please try again.');
+        }
+    };
+
+    // Handle closure modal close
+    const handleClosureModalClose = () => {
+        setShowClosureModal(false);
+        // Reset form to existing values if ticket is already closed, otherwise clear
+        if (ticket && ticket.status === 'closed') {
+            setClosureForm({
+                category: ticket.closure_category || '',
+                reason: ticket.closure_reason || ''
+            });
+        } else {
+            setClosureForm({ category: '', reason: '' });
+        }
+    };
+
+    // Handle closure form submission
+    const handleClosureSubmit = async () => {
+        if (!ticket) return;
+
+        if (!closureForm.category || !closureForm.reason) {
+            alert('Please fill in both Closure Category and Closure Reason');
+            return;
+        }
+
+        try {
+            // Update ticket with status, closure category, and reason
+            const { error } = await supabase
+                .from('tickets')
+                .update({
+                    status: 'closed',
+                    closure_category: closureForm.category,
+                    closure_reason: closureForm.reason,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', ticket.id)
+                .eq('tenant_id', ticket.tenant_id);
+
+            if (error) {
+                console.error('Error closing ticket:', error);
+                alert('Failed to close ticket. Please try again.');
+            } else {
+                // Update local ticket state
+                setTicket({ 
+                    ...ticket, 
+                    status: 'closed',
+                    closure_category: closureForm.category,
+                    closure_reason: closureForm.reason,
+                    updated_at: new Date().toISOString() 
+                });
+                setStatus('closed');
+                
+                // Close modal and clear form
+                handleClosureModalClose();
+                alert('Ticket closed successfully');
+            }
+        } catch (error) {
+            console.error('Error closing ticket:', error);
+            alert('Failed to close ticket. Please try again.');
         }
     };
 
@@ -578,14 +782,16 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             <div className="mb-2" style={{ width: '150px' }}>
                                 <div className="fs-13 fw-medium mb-1">Assigned To</div>
                                 <SpkSelect
-                                    option={assignedToOptions}
-                                    defaultvalue={assignedToOptions[0]}
-                                    placeholder="Select user..."
+                                    option={assignedToUsers}
+                                    getValue={selectedAssignedTo}
+                                    placeholder={loadingUsers ? "Loading users..." : "Select user..."}
                                     searchable={true}
                                     clearable={false}
+                                    disabled={loadingUsers || assignedToUsers.length === 0}
                                     mainClass="react-select-container"
                                     classNameprefix="react-select"
                                     styles={selectStyles}
+                                    onfunchange={handleAssignedToChange}
                                 />
                             </div>
                             <div style={{ width: '150px' }}>
@@ -980,45 +1186,47 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             <div className="table-responsive">
                                 <SpkTables tableClass="table text-nowrap">
                                     <tr>
-                                                            <td><span className="fw-medium">Alert ID :</span></td>
-                                                            <td>{ticket.name ? `INV-${ticket.id} : ${ticket.name}` : (ticket.id || '-')}</td>
+                                        <td><span className="fw-medium">ID :</span></td>
+                                        <td>{ticket.id || 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Alert Tags :</span></td>
-                                                            <td>{ticket.tags || 'N/A'}</td>
+                                        <td><span className="fw-medium">Source ID :</span></td>
+                                        <td>{ticket.source_id || 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Event Type :</span></td>
-                                                            <td>{ticket.event_type || 'N/A'}</td>
+                                        <td><span className="fw-medium">Occurred At :</span></td>
+                                        <td>{ticket.occurred_at ? new Date(ticket.occurred_at).toLocaleString() : 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Assigned By :</span></td>
-                                                            <td>{ticket.assigned_by || 'N/A'}</td>
+                                        <td><span className="fw-medium">Name :</span></td>
+                                        <td>{ticket.name || 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Progress :</span></td>
-                                                            <td>{ticket.status || '-'}</td>
+                                        <td><span className="fw-medium">Severity :</span></td>
+                                        <td>{ticket.severity || 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Alert Status :</span></td>
-                                                            <td>{ticket.status || '-'}</td>
+                                        <td><span className="fw-medium">Instance Name :</span></td>
+                                        <td>{ticket.instance_name || 'N/A'}</td>
                                     </tr>
                                     <tr>
-                                                            <td><span className="fw-medium">Alert Priority :</span></td>
-                                                            <td>{ticket.priority || '-'}</td>
+                                        <td><span className="fw-medium">Tenant Name :</span></td>
+                                        <td>{ticket.tenant_name || 'N/A'}</td>
                                     </tr>
-                                    <tr>
-                                        <td><span className="fw-medium">End Date :</span></td>
-                                                            <td>{ticket.end_date ? new Date(ticket.end_date).toLocaleDateString() : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><span className="fw-medium">Assigned To :</span></td>
-                                                            <td>{ticket.assigned_to || 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><span className="fw-medium">Last Updated Date :</span></td>
-                                                            <td>{ticket.updated_at ? new Date(ticket.updated_at).toLocaleString() : 'N/A'}</td>
-                                    </tr>
+                                    {/* Dynamic fields from alert_fields JSONB column */}
+                                    {alertFields && Object.keys(alertFields).length > 0 && Object.entries(alertFields).map(([key, value]) => (
+                                        <tr key={key}>
+                                            <td><span className="fw-medium">{key} :</span></td>
+                                            <td>
+                                                {value === null || value === undefined || value === '' 
+                                                    ? 'N/A' 
+                                                    : typeof value === 'string' && (value.includes('T') || value.includes('-')) && !isNaN(Date.parse(value))
+                                                        ? new Date(value).toLocaleString()
+                                                        : String(value)
+                                                }
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </SpkTables>
                             </div>
                         </Card.Body>
@@ -1032,44 +1240,50 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                         Object.entries(relatedAlertsData).map(([entityType, entities]) => (
                                             <div key={entityType} className="d-flex flex-column gap-3">
                                                 {/* Entity Type Header */}
-                                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                                    <h5 className="fw-semibold mb-0 related-alerts-text">
-                                                        {entityType === 'ip_addresses' ? 'IP Addresses' : 
-                                                         entityType.replace('_', ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                                                    </h5>
-                                                    <SpkButton 
-                                                        Buttontype="button"
-                                                        Buttonvariant="dark"
-                                                        Customclass="btn-sm"
-                                                        Style={{ minWidth: '100px', width: '100px' }}
-                                                    >
-                                                        {Object.keys(entities).length} {Object.keys(entities).length === 1 ? 'Entity' : 'Entities'}
-                                                    </SpkButton>
+                                                <div className="d-flex align-items-center mb-2">
+                                                    <p className="mb-0 text-badge">
+                                                        <span className="text fw-semibold related-alerts-text" style={{ fontSize: '1.125rem' }}>
+                                                            {entityType === 'ips' ? 'IPs' : 
+                                                             entityType.replace('_', ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                                                        </span>
+                                                        {Object.keys(entities).length === 0 ? (
+                                                            <span className="ms-2 badge rounded-pill" style={{ backgroundColor: '#6c757d', color: '#fff' }}>
+                                                                {Object.keys(entities).length}
+                                                            </span>
+                                                        ) : (
+                                                            <SpkBadge variant="danger" Pill={true} Customclass="ms-2">
+                                                                {Object.keys(entities).length}
+                                                            </SpkBadge>
+                                                        )}
+                                                    </p>
                                                 </div>
 
                                                 {/* Entities and their alerts */}
                                                 {Object.entries(entities).map(([entityName, alerts]) => (
                                                     <div key={entityName} className="d-flex flex-column gap-2">
                                                         {/* Entity Name Header */}
-                                                        <div className="d-flex align-items-center justify-content-between mb-2">
-                                                            <h6 className="fw-medium mb-0 related-alerts-text-secondary">
-                                                                <i className="ri-user-line me-2"></i>
-                                                                {entityName}
-                                                            </h6>
-                                                            <SpkButton 
-                                                                Buttontype="button"
-                                                                Buttonvariant="dark"
-                                                                Customclass="btn-sm"
-                                                                Style={{ minWidth: '100px', width: '100px' }}
-                                                            >
-                                                                {alerts.length} Alert{alerts.length !== 1 ? 's' : ''}
-                                                            </SpkButton>
+                                                        <div className="d-flex align-items-center mb-2">
+                                                            <p className="mb-0 text-badge">
+                                                                <span className="text fw-medium related-alerts-text-secondary">
+                                                                    <i className="ri-user-line me-2"></i>
+                                                                    {entityName}
+                                                                </span>
+                                                                {alerts.length === 0 ? (
+                                                                    <span className="ms-2 badge rounded-pill" style={{ backgroundColor: '#6c757d', color: '#fff' }}>
+                                                                        {alerts.length}
+                                                                    </span>
+                                                                ) : (
+                                                                    <SpkBadge variant="danger" Pill={true} Customclass="ms-2">
+                                                                        {alerts.length}
+                                                                    </SpkBadge>
+                                                                )}
+                                                            </p>
                                                         </div>
 
                                                         {/* Alerts Cards for this entity - Two Column Split View */}
                                                         {alerts.length > 0 ? (
                                                             <Row className="ms-4">
-                                                                {alerts.map((alert, index) => (
+                                                                {alerts.map((alert) => (
                                                                     <Col key={alert.id} md={6} className="mb-2">
                                                                         <Card className="custom-card mb-0" style={{ 
                                                                             borderLeft: alert.severity === 'critical' ? '4px solid #dc3545' : 
@@ -1091,6 +1305,26 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                                                             ID: {alert.id}
                                                                                         </SpkButton>
                                                                                         <span className="text-muted fs-12">{alert.time}</span>
+                                                                                        <div className="d-flex align-items-center gap-2 ms-auto">
+                                                                                            {alert.status && (
+                                                                                                <SpkButton 
+                                                                                                    Buttontype="button"
+                                                                                                    Buttonvariant="outline-light"
+                                                                                                    Customclass="rounded-pill btn-sm"
+                                                                                                >
+                                                                                                    {alert.status.charAt(0).toUpperCase() + alert.status.slice(1)}
+                                                                                                </SpkButton>
+                                                                                            )}
+                                                                                            {alert.closure_category && alert.closure_category !== '' && (
+                                                                                                <SpkButton 
+                                                                                                    Buttontype="button"
+                                                                                                    Buttonvariant="outline-light"
+                                                                                                    Customclass="rounded-pill btn-sm"
+                                                                                                >
+                                                                                                    {alert.closure_category}
+                                                                                                </SpkButton>
+                                                                                            )}
+                                                                                        </div>
                                                                                     </div>
                                                                                     <h6 className="fw-semibold mb-0 related-alerts-text" style={{ fontSize: '0.95rem', lineHeight: '1.4' }}>{alert.name}</h6>
                                                                                 </div>
@@ -1201,9 +1435,10 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
             </Card>
             <style dangerouslySetInnerHTML={{__html: `
                 #severity-dropdown.dropdown-toggle {
-                    padding-top: 0.15rem !important;
-                    padding-bottom: 0.15rem !important;
-                    line-height: 1.3 !important;
+                    padding-top: 0.25rem !important;
+                    padding-bottom: 0.25rem !important;
+                    line-height: 1.4 !important;
+                    min-height: 28px !important;
                 }
                 /* Related Alerts Text Colors - Light Mode (default) */
                 .related-alerts-text {
@@ -1219,7 +1454,111 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                 [data-theme-mode="dark"] .related-alerts-text-secondary {
                     color: rgba(255, 255, 255, 0.7) !important;
                 }
+                /* Assigned To Dropdown Dark Mode Styles */
+                [data-theme-mode="dark"] .react-select-container .react-select__control {
+                    background-color: #1e293b !important;
+                    border-color: #334155 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__control:hover {
+                    border-color: #475569 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__single-value {
+                    color: #fff !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__placeholder {
+                    color: #94a3b8 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__input-container {
+                    color: #fff !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__menu {
+                    background-color: #1e293b !important;
+                    border-color: #334155 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__menu-list {
+                    background-color: #1e293b !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__option {
+                    background-color: #1e293b !important;
+                    color: #fff !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__option:hover {
+                    background-color: #334155 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__option--is-focused {
+                    background-color: #334155 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__option--is-selected {
+                    background-color: #3b82f6 !important;
+                    color: #fff !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__indicator {
+                    color: #94a3b8 !important;
+                }
+                [data-theme-mode="dark"] .react-select-container .react-select__indicator:hover {
+                    color: #fff !important;
+                }
             `}} />
+            
+            {/* Closure Modal */}
+            <Modal show={showClosureModal} centered onHide={handleClosureModalClose} className="modal fade" id="closure-modal" tabIndex={-1}>
+                <Modal.Header className="modal-header">
+                    <Modal.Title className="modal-title h6">Close Ticket</Modal.Title>
+                    <SpkButton Buttonvariant="" Buttontype="button" Customclass="btn-close" data-bs-dismiss="modal"
+                        aria-label="Close" onClickfunc={handleClosureModalClose} ></SpkButton>
+                </Modal.Header>
+                <Modal.Body className="modal-body px-4">
+                    <div className="mb-3">
+                        <p className="text-muted">You are closing ticket <strong>INV-{ticket?.id}</strong>.</p>
+                    </div>
+                    <Row className="gy-3">
+                        <Col xl={12}>
+                            <Form.Label htmlFor="closure-category">Closure Category</Form.Label>
+                            <Form.Select 
+                                id="closure-category"
+                                value={closureForm.category}
+                                onChange={(e) => setClosureForm(prev => ({ ...prev, category: e.target.value }))}
+                            >
+                                <option value="">Select Category</option>
+                                <option value="True Positive">True Positive</option>
+                                <option value="False Positive">False Positive</option>
+                            </Form.Select>
+                        </Col>
+                        <Col xl={12}>
+                            <Form.Label htmlFor="closure-reason">Closure Reason</Form.Label>
+                            <Form.Control 
+                                as="textarea" 
+                                rows={3}
+                                id="closure-reason"
+                                placeholder="Enter closure reason..."
+                                value={closureForm.reason}
+                                onChange={(e) => setClosureForm(prev => ({ ...prev, reason: e.target.value }))}
+                            />
+                        </Col>
+                    </Row>
+                </Modal.Body>
+                <Modal.Footer className="modal-footer">
+                    <div className="d-flex justify-content-between w-100">
+                        <SpkButton 
+                            Buttonvariant="light" 
+                            Buttontype="button" 
+                            Customclass="btn btn-light"
+                            data-bs-dismiss="modal" 
+                            onClickfunc={handleClosureModalClose}
+                        >
+                            Cancel
+                        </SpkButton>
+                        <SpkButton 
+                            Buttonvariant="success" 
+                            Buttontype="button" 
+                            Customclass="btn btn-success"
+                            onClickfunc={handleClosureSubmit}
+                        >
+                            <i className="ri-check-line me-1"></i> Close Ticket
+                        </SpkButton>
+                    </div>
+                </Modal.Footer>
+            </Modal>
         </Fragment>
     );
 };

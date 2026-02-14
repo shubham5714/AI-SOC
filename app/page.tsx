@@ -256,19 +256,18 @@ const Page = () => {
                     // MFA verification successful, proceed with user data
                     const userId = verifiedData.user?.id;
                     if (userId) {
-                        // Fetch assigned tenants
                         const { data: tenantRows, error: tenantsError } = await supabase
                             .from('user_tenants')
-                            .select('tenant_id, tenants(name)')
+                            .select('tenant_id, tenant_name')
                             .eq('user_id', userId);
 
                         if (tenantsError) {
                             throw tenantsError;
                         }
 
-                        const assignedTenants = (tenantRows || []).map((t: any) => ({ 
+                        const assignedTenants: Array<{ id: string; name: string }> = (tenantRows || []).map((t: any) => ({ 
                             id: t.tenant_id, 
-                            name: t.tenants?.name 
+                            name: t.tenant_name || t.tenant_id
                         }));
                         
                         // Fetch user role

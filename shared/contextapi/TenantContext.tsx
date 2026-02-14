@@ -53,7 +53,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
           try {
             const { data: tenantRows, error: tenantsError } = await supabase
               .from('user_tenants')
-              .select('tenant_id, tenants(name)')
+              .select('tenant_id, tenant_name')
               .eq('user_id', user.id);
 
             if (tenantsError) {
@@ -62,11 +62,10 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
             } else {
               const assignedTenants = (tenantRows || []).map((t: any) => ({ 
                 id: t.tenant_id, 
-                name: t.tenants?.name 
+                name: t.tenant_name || t.tenant_id
               }));
-              setAssignedTenants(assignedTenants);
               
-              // Store in session storage for future use
+              setAssignedTenants(assignedTenants);
               sessionStorage.setItem('assignedTenants', JSON.stringify(assignedTenants));
             }
           } catch (fetchError) {
