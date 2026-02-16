@@ -824,16 +824,6 @@ const Page = () => {
                                                 <button type="submit" className="btn btn-primary">
                                                     {mfaTicket ? 'Verify & Sign In' : 'Sign In'}
                                                 </button>
-                                                <p className="text-muted mt-3 mb-0 text-center">
-                                                    Don't have an account? 
-                                                    <Link 
-                                                        scroll={false} 
-                                                        href="/authentication/sign-up/sign-up-basic/" 
-                                                        className="text-primary fw-medium"
-                                                    >
-                                                        {' '}Sign Up
-                                                        </Link>
-                                                </p>
                                                     </div>
                                         </Form>
                                                 </Card.Body>
