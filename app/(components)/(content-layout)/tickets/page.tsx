@@ -29,8 +29,31 @@ interface SupabaseTicket {
     closure_reason?: string;
     created_at?: string;
     updated_at?: string;
+    occurred_at?: string;
     [key: string]: any; // Allow for additional fields
 }
+
+// Format a UTC datetime string to IST for display
+const formatUtcToIst = (value?: string | null): string => {
+    if (!value) return '-';
+    try {
+        let normalized = value;
+        // Handle "YYYY-MM-DD HH:mm:ss" by converting to ISO-like and marking as UTC
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(value)) {
+            normalized = value.replace(' ', 'T') + 'Z';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) {
+            // Bare ISO without timezone - treat as UTC
+            normalized = value + 'Z';
+        }
+        const date = new Date(normalized);
+        if (isNaN(date.getTime())) {
+            return value;
+        }
+        return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
+    } catch {
+        return value;
+    }
+};
 
 // Column configuration interface
 interface ColumnConfig {
@@ -177,7 +200,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
     // Define default selected columns with their order
     const DEFAULT_SELECTED_COLUMNS = [
         'id',
-        'created_at',
+        'occurred_at',
         'severity',
         'name',
         'artifacts_and_assets',
@@ -192,6 +215,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
 
     // Define additional available columns (not selected by default)
     const ADDITIONAL_AVAILABLE_COLUMNS = [
+        'created_at',
         'closure_category',
         'closure_reason',
         'updated_at',
@@ -367,6 +391,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                     'status_color': 'Status Color',
                     'priority_color': 'Priority Color',
                     'created_at': 'Created At',
+                    'occurred_at': 'Occurred At',
                     'updated_at': 'Updated At',
                     'ai_status': 'Investigation Status',
                     'source_id': 'Source ID',
@@ -1066,10 +1091,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             <span className="text-muted">{ticket.priority_color || '-'}</span>
                                                         )}
                                                         {col.key === 'created_at' && (
-                                                            <span>{ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '-'}</span>
+                                                            <span>{formatUtcToIst(ticket.created_at)}</span>
+                                                        )}
+                                                        {col.key === 'occurred_at' && (
+                                                            <span>{formatUtcToIst(ticket.occurred_at)}</span>
                                                         )}
                                                         {col.key === 'updated_at' && (
-                                                            <span>{ticket.updated_at ? new Date(ticket.updated_at).toLocaleDateString() : '-'}</span>
+                                                            <span>{formatUtcToIst(ticket.updated_at)}</span>
                                                         )}
                                                         {col.key === 'alert_source' && (
                                                             <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -1274,7 +1302,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             </div>
                                                         )}
                                                         {/* Handle any other columns dynamically */}
-                                                        {!['id', 'title', 'name', 'status', 'priority', 'severity', 'alert_source', 'mitre', 'ai_status', 'tenant_id', 'tenant_name', 'assigned_to', 'source_id', 'closure_category', 'closure_reason', 'artifacts_and_assets', 'status_color', 'priority_color', 'created_at', 'updated_at'].includes(col.key) && (
+                                                        {!['id', 'title', 'name', 'status', 'priority', 'severity', 'alert_source', 'mitre', 'ai_status', 'tenant_id', 'tenant_name', 'assigned_to', 'source_id', 'closure_category', 'closure_reason', 'artifacts_and_assets', 'status_color', 'priority_color', 'created_at', 'occurred_at', 'updated_at'].includes(col.key) && (
                                                             <span>
                                                                 {/* Check if this column contains severity-like values */}
                                                                 {(() => {

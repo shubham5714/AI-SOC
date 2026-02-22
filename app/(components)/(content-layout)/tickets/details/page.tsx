@@ -91,8 +91,31 @@ interface TicketData {
     alert_analysis?: AlertAnalysis | string;
     alert_fields?: AlertFields | string;
     related_alerts?: RelatedAlertsData | string;
+    raw_logs?: unknown[] | string;
     [key: string]: any;
 }
+
+// Format a UTC datetime string to IST for display
+const formatUtcToIst = (value?: string | null): string => {
+    if (!value) return 'N/A';
+    try {
+        let normalized = value;
+        // Handle "YYYY-MM-DD HH:mm:ss" by converting to ISO-like and marking as UTC
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(value)) {
+            normalized = value.replace(' ', 'T') + 'Z';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) {
+            // Bare ISO without timezone - treat as UTC
+            normalized = value + 'Z';
+        }
+        const date = new Date(normalized);
+        if (isNaN(date.getTime())) {
+            return value;
+        }
+        return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
+    } catch {
+        return value;
+    }
+};
 
 // Normalize related alerts data from database format to display format
 const normalizeRelatedAlerts = (data: any): RelatedAlertsData => {
@@ -1195,7 +1218,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Occurred At :</span></td>
-                                        <td>{ticket.occurred_at ? new Date(ticket.occurred_at).toLocaleString() : 'N/A'}</td>
+                                        <td>{formatUtcToIst(ticket.occurred_at)}</td>
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Name :</span></td>
@@ -1352,77 +1375,40 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             </Tab.Pane>
                             <Tab.Pane eventKey='logs' className="pt-3 px-4 pb-4" role="tabpanel">
                                 <div className="d-flex flex-column gap-3">
-                                    {[
-                                        {
-                                            timestamp: "2024-06-18T10:30:45.123Z",
-                                            level: "WARNING",
-                                            source: "firewall",
-                                            message: "Multiple failed login attempts detected",
-                                            data: {
-                                                "ip_address": "192.168.1.100",
-                                                "username": "admin",
-                                                "failed_attempts": 5,
-                                                "event_type": "authentication_failure",
-                                                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                                                "geolocation": {
-                                                    "country": "US",
-                                                    "city": "New York",
-                                                    "latitude": 40.7128,
-                                                    "longitude": -74.0060
-                                                }
+                                    {(() => {
+                                        const rawLogs = (() => {
+                                            const val = ticket?.raw_logs;
+                                            if (val == null) return [];
+                                            if (Array.isArray(val)) return val;
+                                            if (typeof val === 'string') {
+                                                try { return JSON.parse(val) as unknown[]; } catch { return []; }
                                             }
-                                        },
-                                        {
-                                            timestamp: "2024-06-18T10:31:12.456Z",
-                                            level: "ERROR",
-                                            source: "ids",
-                                            message: "Suspicious network traffic pattern detected",
-                                            data: {
-                                                "src_ip": "10.0.0.45",
-                                                "dst_ip": "172.16.0.20",
-                                                "protocol": "TCP",
-                                                "port": 443,
-                                                "bytes_sent": 1024000,
-                                                "bytes_received": 512000,
-                                                "duration_seconds": 45,
-                                                "threat_score": 85,
-                                                "signature": "ET MALWARE Known Malicious IP"
-                                            }
-                                        },
-                                        {
-                                            timestamp: "2024-06-18T10:32:05.789Z",
-                                            level: "INFO",
-                                            source: "endpoint",
-                                            message: "File hash detected in threat intelligence database",
-                                            data: {
-                                                "file_path": "/var/tmp/suspicious_file.exe",
-                                                "file_hash": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
-                                                "hash_type": "SHA256",
-                                                "file_size": 2621440,
-                                                "threat_intel_match": true,
-                                                "threat_feed": "VirusTotal",
-                                                "detection_count": 42,
-                                                "severity": "HIGH"
-                                            }
+                                            return [];
+                                        })();
+                                        if (rawLogs.length === 0) {
+                                            return (
+                                                <p className="text-muted mb-0">No raw logs available for this ticket.</p>
+                                            );
                                         }
-                                    ].map((log, index) => (
-                                        <Card key={index} className="custom-card mb-0" style={{ backgroundColor: '#000', borderColor: '#333' }}>
-                                            <Card.Body className="p-3">
-                                                <pre style={{ 
-                                                    margin: 0, 
-                                                    color: '#0f0', 
-                                                    backgroundColor: '#000',
-                                                    fontFamily: 'monospace',
-                                                    fontSize: '0.875rem',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-word',
-                                                    overflowX: 'auto'
-                                                }}>
-                                                    {JSON.stringify(log, null, 2)}
-                                                </pre>
-                                            </Card.Body>
-                                        </Card>
-                                    ))}
+                                        return rawLogs.map((log, index) => (
+                                            <Card key={index} className="custom-card mb-0" style={{ backgroundColor: '#000', borderColor: '#333' }}>
+                                                <Card.Body className="p-3">
+                                                    <pre style={{
+                                                        margin: 0,
+                                                        color: '#0f0',
+                                                        backgroundColor: '#000',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.875rem',
+                                                        whiteSpace: 'pre-wrap',
+                                                        wordBreak: 'break-word',
+                                                        overflowX: 'auto'
+                                                    }}>
+                                                        {typeof log === 'string' ? log : JSON.stringify(log, null, 2)}
+                                                    </pre>
+                                                </Card.Body>
+                                            </Card>
+                                        ));
+                                    })()}
                                 </div>
                             </Tab.Pane>
                             <Tab.Pane eventKey='graph' className="pt-3 px-4 pb-4" role="tabpanel">
