@@ -9,6 +9,7 @@ import SpkTables from "@/shared/@spk-reusable-components/reusable-tables/spk-tab
 import Seo from "@/shared/layouts-components/seo/seo";
 import { supabase } from "@/shared/lib/supabase";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
+import { useUserContext } from "@/shared/contextapi/UserContext";
 import { useSearchParams } from "next/navigation";
 import React, { Fragment, useState, useEffect, useCallback } from "react";
 import { Card, Col, Dropdown, ListGroup, Nav, Row, Tab, Spinner, Modal, Form } from "react-bootstrap";
@@ -95,8 +96,8 @@ interface TicketData {
     [key: string]: any;
 }
 
-// Format a UTC datetime string to IST for display
-const formatUtcToIst = (value?: string | null): string => {
+// Format a UTC datetime string to user's timezone for display
+const formatUtcToUserTimezone = (value?: string | null, timezone: string = 'UTC'): string => {
     if (!value) return 'N/A';
     try {
         let normalized = value;
@@ -111,7 +112,8 @@ const formatUtcToIst = (value?: string | null): string => {
         if (isNaN(date.getTime())) {
             return value;
         }
-        return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
+        // Use user's timezone for display
+        return date.toLocaleString('en-US', { timeZone: timezone, hour12: false }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
     } catch {
         return value;
     }
@@ -166,6 +168,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const searchParams = useSearchParams();
     const ticketId = searchParams.get('id');
     const { selectedTenantIds, assignedTenants } = useTenantContext();
+    const { userData } = useUserContext();
     
     const [ticket, setTicket] = useState<TicketData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -184,6 +187,104 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         category: '',
         reason: ''
     });
+
+    // Function to export raw_logs to CSV
+    const handleExportLogs = () => {
+        if (!ticket) {
+            alert('No ticket data available');
+            return;
+        }
+
+        // Parse raw_logs the same way as in the display
+        const rawLogs = (() => {
+            const val = ticket.raw_logs;
+            if (val == null) return [];
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+                try { return JSON.parse(val) as unknown[]; } catch { return []; }
+            }
+            return [];
+        })();
+
+        if (rawLogs.length === 0) {
+            alert('No raw logs available to export');
+            return;
+        }
+
+        // Helper to check if value is a plain object (not array, not null)
+        const isPlainObject = (val: any): boolean => {
+            return typeof val === 'object' && val !== null && !Array.isArray(val);
+        };
+
+        // Helper to escape CSV values
+        const escapeCsvValue = (val: any): string => {
+            if (val === null || val === undefined) {
+                return '""';
+            }
+            if (typeof val === 'object') {
+                return `"${JSON.stringify(val).replace(/"/g, '""')}"`;
+            }
+            return `"${String(val).replace(/"/g, '""')}"`;
+        };
+
+        // Parse each log item - handle JSON strings
+        const parsedLogs = rawLogs.map((log: any) => {
+            if (typeof log === 'string') {
+                try {
+                    const parsed = JSON.parse(log);
+                    return isPlainObject(parsed) || Array.isArray(parsed) ? parsed : log;
+                } catch {
+                    return log;
+                }
+            }
+            return log;
+        });
+        
+        // Convert to CSV
+        let csvContent = '';
+        const firstLog = parsedLogs[0];
+        
+        if (isPlainObject(firstLog)) {
+            // Array of objects - create CSV with headers
+            const allKeys = new Set<string>();
+            parsedLogs.forEach((log: any) => {
+                if (isPlainObject(log)) {
+                    Object.keys(log).forEach(key => allKeys.add(key));
+                }
+            });
+            
+            const headers = Array.from(allKeys).sort();
+            csvContent += headers.map(h => escapeCsvValue(h)).join(',') + '\n';
+            
+            // Add rows
+            parsedLogs.forEach((log: any) => {
+                const row = headers.map(header => {
+                    const value = isPlainObject(log) ? log[header] : null;
+                    return escapeCsvValue(value);
+                });
+                csvContent += row.join(',') + '\n';
+            });
+        } else {
+            // Array of strings or primitives - simple CSV with one column
+            csvContent += '"Log Entry"\n';
+            parsedLogs.forEach((log: any) => {
+                const value = typeof log === 'string' ? log : JSON.stringify(log);
+                csvContent += escapeCsvValue(value) + '\n';
+            });
+        }
+
+        // Create blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Alert-${ticket.id}-logs.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
 
     const handleSeverityChange = async (eventKey: string | null) => {
         if (!ticket || !eventKey) return;
@@ -935,6 +1036,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                     Buttonvariant="primary-light" 
                                     Buttontype="button" 
                                     Customclass="btn btn-wave"
+                                    onClickfunc={handleExportLogs}
                                 >
                                     <i className="ri-upload-cloud-line align-middle me-1"></i>Export Logs
                                 </SpkButton>
@@ -1218,7 +1320,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Occurred At :</span></td>
-                                        <td>{formatUtcToIst(ticket.occurred_at)}</td>
+                                        <td>{formatUtcToUserTimezone(ticket.occurred_at, userData?.timezone || 'UTC')}</td>
                                     </tr>
                                     <tr>
                                         <td><span className="fw-medium">Name :</span></td>

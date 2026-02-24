@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useTenantContext } from '@/shared/contextapi/TenantContext';
 import { useUserContext } from '@/shared/contextapi/UserContext';
 import { useDateRangeContext } from '@/shared/contextapi/DateRangeContext';
+import { convertUserTimezoneToUTC } from '@/shared/lib/timezone';
 
 interface HeaderProps { }
 
@@ -380,45 +381,78 @@ const Header: React.FC<HeaderProps> = () => {
                             </Form.Select>
                         </div>
 
-                        {/* Date Range Picker */}
-                        <div className="header-element d-md-block d-none my-auto" style={{ minWidth: 320 }}>
+                        {/* Date Range Picker with Time */}
+                        <div className="header-element d-md-block d-none my-auto" style={{ minWidth: 400 }}>
                             <div className="d-flex gap-2">
                                 <DatePicker 
                                     className="form-control form-control-sm" 
                                     selected={dateRange[0]} 
                                     onChange={(date) => {
-                                        if (date) {
-                                            const newRange = [date, dateRange[1]] as [Date, Date];
+                                        if (date && userData?.timezone) {
+                                            const startDate = new Date(date.getTime());
+                                            console.log('DatePicker Start Date Selected:', {
+                                                'Date Object': startDate.toString(),
+                                                'Local Time': startDate.toLocaleString(),
+                                                'ISO String': startDate.toISOString(),
+                                                'Components': {
+                                                    year: startDate.getFullYear(),
+                                                    month: startDate.getMonth() + 1,
+                                                    day: startDate.getDate(),
+                                                    hours: startDate.getHours(),
+                                                    minutes: startDate.getMinutes()
+                                                },
+                                                'User Timezone': userData.timezone
+                                            });
+                                            const newRange = [startDate, dateRange[1]] as [Date, Date];
                                             setDateRange(newRange);
                                             if (typeof window !== 'undefined') {
-                                                sessionStorage.setItem('dateRange', JSON.stringify([date.toISOString(), dateRange[1].toISOString()]));
+                                                // Convert to UTC using user's timezone before storing
+                                                const startUTC = convertUserTimezoneToUTC(startDate, userData.timezone);
+                                                const endUTC = convertUserTimezoneToUTC(dateRange[1], userData.timezone);
+                                                console.log('DatePicker Conversion Result:', {
+                                                    'Start UTC': startUTC,
+                                                    'End UTC': endUTC
+                                                });
+                                                sessionStorage.setItem('dateRange', JSON.stringify([startUTC, endUTC]));
                                                 try {
-                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: date, end: dateRange[1] } }));
+                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: startDate, end: dateRange[1] } }));
                                                 } catch { }
                                             }
                                         }
                                     }} 
-                                    placeholderText="Start Date"
-                                    dateFormat="MM/dd/yyyy"
+                                    placeholderText="Start Date & Time"
+                                    dateFormat="MM/dd/yyyy HH:mm"
+                                    showTimeSelect
+                                    timeIntervals={15}
+                                    timeCaption="Time"
+                                    timeFormat="HH:mm"
                                     maxDate={dateRange[1]}
                                 />
                                 <DatePicker 
                                     className="form-control form-control-sm" 
                                     selected={dateRange[1]} 
                                     onChange={(date) => {
-                                        if (date) {
-                                            const newRange = [dateRange[0], date] as [Date, Date];
+                                        if (date && userData?.timezone) {
+                                            const endDate = new Date(date.getTime());
+                                            const newRange = [dateRange[0], endDate] as [Date, Date];
                                             setDateRange(newRange);
                                             if (typeof window !== 'undefined') {
-                                                sessionStorage.setItem('dateRange', JSON.stringify([dateRange[0].toISOString(), date.toISOString()]));
+                                                // Convert to UTC using user's timezone before storing
+                                                const startUTC = convertUserTimezoneToUTC(dateRange[0], userData.timezone);
+                                                const endUTC = convertUserTimezoneToUTC(endDate, userData.timezone);
+                                                sessionStorage.setItem('dateRange', JSON.stringify([startUTC, endUTC]));
                                                 try {
-                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: dateRange[0], end: date } }));
+                                                    window.dispatchEvent(new CustomEvent('dateRangeChanged', { detail: { start: dateRange[0], end: endDate } }));
                                                 } catch { }
                                             }
                                         }
                                     }} 
-                                    placeholderText="End Date"
-                                    dateFormat="MM/dd/yyyy"
+                                    placeholderText="End Date & Time"
+                                    dateFormat="MM/dd/yyyy HH:mm"
+                                    showTimeSelect
+                                    timeIntervals={15}
+                                    timeCaption="Time"
+                                    timeFormat="HH:mm"
                                     minDate={dateRange[0]}
                                 />
                             </div>

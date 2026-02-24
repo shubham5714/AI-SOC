@@ -10,6 +10,8 @@ import Seo from "@/shared/layouts-components/seo/seo";
 import { supabase } from "@/shared/lib/supabase";
 import { useTenantContext } from "@/shared/contextapi/TenantContext";
 import { useDateRangeContext } from "@/shared/contextapi/DateRangeContext";
+import { useUserContext } from "@/shared/contextapi/UserContext";
+import { convertUserTimezoneToUTC } from "@/shared/lib/timezone";
 import Image from "next/image";
 import Link from "next/link";
 import React, { Fragment, useState, useEffect, useCallback, useMemo } from "react";
@@ -33,8 +35,8 @@ interface SupabaseTicket {
     [key: string]: any; // Allow for additional fields
 }
 
-// Format a UTC datetime string to IST for display
-const formatUtcToIst = (value?: string | null): string => {
+// Format a UTC datetime string to user's timezone for display
+const formatUtcToUserTimezone = (value?: string | null, timezone: string = 'UTC'): string => {
     if (!value) return '-';
     try {
         let normalized = value;
@@ -49,7 +51,8 @@ const formatUtcToIst = (value?: string | null): string => {
         if (isNaN(date.getTime())) {
             return value;
         }
-        return date.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
+        // Use user's timezone for display
+        return date.toLocaleString('en-US', { timeZone: timezone, hour12: false }).replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
     } catch {
         return value;
     }
@@ -164,6 +167,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
     // Context hooks
     const { assignedTenants, selectedTenantIds, isLoading: tenantLoading } = useTenantContext();
     const { dateRange, isLoading: dateRangeLoading } = useDateRangeContext();
+    const { userData } = useUserContext();
     
     const [tickets, setTickets] = useState<SupabaseTicket[]>([]);
     const [loading, setLoading] = useState(true);
@@ -551,14 +555,33 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 query = query.eq('tenant_id', selectedTenantIds);
             }
 
-            // Apply date range filter
-            // Ensure end date includes the full day (23:59:59.999) to include all tickets created on that day
-            if (dateRange && dateRange[0] && dateRange[1]) {
-                const startDate = new Date(dateRange[0]);
-                startDate.setHours(0, 0, 0, 0); // Start of day
-                const endDate = new Date(dateRange[1]);
-                endDate.setHours(23, 59, 59, 999); // End of day to include all tickets created on that day
-                query = query.gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString());
+            // Apply date range filter with time precision
+            // Convert user's timezone time to UTC for database query
+            if (dateRange && dateRange[0] && dateRange[1] && userData?.timezone) {
+                const startDate = new Date(dateRange[0].getTime());
+                const endDate = new Date(dateRange[1].getTime());
+                
+                console.log('Query Filter - Before Conversion:', {
+                    'Start Date from dateRange': startDate.toString(),
+                    'Start Date Local': startDate.toLocaleString(),
+                    'Start Date ISO': startDate.toISOString(),
+                    'End Date from dateRange': endDate.toString(),
+                    'End Date Local': endDate.toLocaleString(),
+                    'End Date ISO': endDate.toISOString(),
+                    'User Timezone': userData.timezone
+                });
+                
+                const startUTC = convertUserTimezoneToUTC(startDate, userData.timezone);
+                const endUTC = convertUserTimezoneToUTC(endDate, userData.timezone);
+                
+                console.log('Query Filter - Final UTC Values:', {
+                    'Start UTC (for DB query)': startUTC,
+                    'End UTC (for DB query)': endUTC,
+                    'Start UTC displays in User TZ': new Date(startUTC).toLocaleString('en-US', { timeZone: userData.timezone, hour12: false }),
+                    'End UTC displays in User TZ': new Date(endUTC).toLocaleString('en-US', { timeZone: userData.timezone, hour12: false })
+                });
+                
+                query = query.gte('created_at', startUTC).lte('created_at', endUTC);
             }
 
             // Apply search conditions
@@ -617,14 +640,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                 dataQuery = dataQuery.eq('tenant_id', selectedTenantIds);
             }
 
-            // Apply same date range filter
-            // Ensure end date includes the full day (23:59:59.999) to include all tickets created on that day
-            if (dateRange && dateRange[0] && dateRange[1]) {
-                const startDate = new Date(dateRange[0]);
-                startDate.setHours(0, 0, 0, 0); // Start of day
-                const endDate = new Date(dateRange[1]);
-                endDate.setHours(23, 59, 59, 999); // End of day to include all tickets created on that day
-                dataQuery = dataQuery.gte('created_at', startDate.toISOString()).lte('created_at', endDate.toISOString());
+            // Apply same date range filter with time precision
+            if (dateRange && dateRange[0] && dateRange[1] && userData?.timezone) {
+                const startDate = new Date(dateRange[0].getTime());
+                const endDate = new Date(dateRange[1].getTime());
+                const startUTC = convertUserTimezoneToUTC(startDate, userData.timezone);
+                const endUTC = convertUserTimezoneToUTC(endDate, userData.timezone);
+                dataQuery = dataQuery.gte('created_at', startUTC).lte('created_at', endUTC);
             }
 
             // Apply same search conditions
@@ -676,7 +698,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
         } finally {
             setLoading(false);
         }
-    }, [selectedTenantIds, dateRange, assignedTenants, activeSearchQuery]);
+    }, [selectedTenantIds, dateRange, assignedTenants, activeSearchQuery, dateRangeLoading, userData]);
 
     // Load next page
     const handleNextPage = () => {
@@ -812,12 +834,17 @@ const TicketsList: React.FC<TicketsListProps> = () => {
     }, [fetchAvailableColumns]);
 
     // Fetch tickets when context values or search query change
+    // Use dateRange ISO strings in dependency to ensure re-fetch when dates change
+    const dateRangeKey = dateRange && dateRange[0] && dateRange[1] 
+        ? `${dateRange[0].toISOString()}-${dateRange[1].toISOString()}` 
+        : '';
+    
     useEffect(() => {
         if (!tenantLoading && !dateRangeLoading) {
             fetchTickets(1);
-            setCurrentPage(1); // Reset to first page when filters change
+            setCurrentPage(1);
         }
-    }, [fetchTickets, tenantLoading, dateRangeLoading]);
+    }, [fetchTickets, tenantLoading, dateRangeLoading, dateRangeKey]);
 
     // Get visible columns sorted by order
     const visibleColumns = (columnConfig || [])
@@ -1091,13 +1118,13 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                             <span className="text-muted">{ticket.priority_color || '-'}</span>
                                                         )}
                                                         {col.key === 'created_at' && (
-                                                            <span>{formatUtcToIst(ticket.created_at)}</span>
+                                                            <span>{formatUtcToUserTimezone(ticket.created_at, userData?.timezone || 'UTC')}</span>
                                                         )}
                                                         {col.key === 'occurred_at' && (
-                                                            <span>{formatUtcToIst(ticket.occurred_at)}</span>
+                                                            <span>{formatUtcToUserTimezone(ticket.occurred_at, userData?.timezone || 'UTC')}</span>
                                                         )}
                                                         {col.key === 'updated_at' && (
-                                                            <span>{formatUtcToIst(ticket.updated_at)}</span>
+                                                            <span>{formatUtcToUserTimezone(ticket.updated_at, userData?.timezone || 'UTC')}</span>
                                                         )}
                                                         {col.key === 'alert_source' && (
                                                             <div style={{ display: 'flex', alignItems: 'center' }}>

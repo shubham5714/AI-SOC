@@ -270,10 +270,10 @@ const Page = () => {
                             name: t.tenant_name || t.tenant_id
                         }));
                         
-                        // Fetch user role
+                        // Fetch user role and timezone
                         const { data: userRoleData, error: roleError } = await supabase
                             .from('user_roles')
-                            .select('username, role')
+                            .select('username, role, timezone')
                             .eq('user_id', userId)
                             .single();
 
@@ -284,11 +284,12 @@ const Page = () => {
                         if (mounted) {
                             updateTenants(assignedTenants);
                             
-                            // Store user role in context
+                            // Store user role and timezone in context
                             if (userRoleData) {
                                 updateUserData({
                                     username: userRoleData.username,
-                                    role: userRoleData.role
+                                    role: userRoleData.role,
+                                    timezone: userRoleData.timezone || 'UTC'
                                 });
                             }
                         }

@@ -1,5 +1,7 @@
 "use client"
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useUserContext } from './UserContext';
+import { convertUserTimezoneToUTC } from '@/shared/lib/timezone';
 
 interface DateRangeContextType {
   dateRange: [Date, Date];
@@ -14,11 +16,17 @@ interface DateRangeProviderProps {
 }
 
 export const DateRangeProvider: React.FC<DateRangeProviderProps> = ({ children }) => {
+  // Get user timezone from UserContext (if available)
+  const { userData } = useUserContext();
+  const userTimezone = userData?.timezone || 'UTC'; // Default fallback
+  
   const [dateRange, setDateRangeState] = useState<[Date, Date]>(() => {
     const today = new Date();
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 7);
-    return [sevenDaysAgo, today];
+    today.setHours(23, 59, 59, 999); // End of day
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(today.getDate() - 2);
+    twoDaysAgo.setHours(0, 0, 0, 0); // Start of day
+    return [twoDaysAgo, today];
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,25 +37,37 @@ export const DateRangeProvider: React.FC<DateRangeProviderProps> = ({ children }
         const raw = sessionStorage.getItem('dateRange');
         if (raw) {
           const parsed = JSON.parse(raw);
-          setDateRangeState([new Date(parsed[0]), new Date(parsed[1])]);
+          const startDate = new Date(parsed[0]);
+          const endDate = new Date(parsed[1]);
+          setDateRangeState([new Date(startDate.getTime()), new Date(endDate.getTime())]);
         } else {
           // Set default range and store in session
           const today = new Date();
-          const sevenDaysAgo = new Date(today);
-          sevenDaysAgo.setDate(today.getDate() - 7);
-          const defaultRange = [sevenDaysAgo, today] as [Date, Date];
+          today.setHours(23, 59, 59, 999); // End of day
+          const twoDaysAgo = new Date(today);
+          twoDaysAgo.setDate(today.getDate() - 2);
+          twoDaysAgo.setHours(0, 0, 0, 0); // Start of day
+          const defaultRange = [twoDaysAgo, today] as [Date, Date];
           setDateRangeState(defaultRange);
-          sessionStorage.setItem('dateRange', JSON.stringify([defaultRange[0].toISOString(), defaultRange[1].toISOString()]));
+          // Convert to UTC using user's timezone (or default) before storing
+          const startUTC = convertUserTimezoneToUTC(defaultRange[0], userTimezone);
+          const endUTC = convertUserTimezoneToUTC(defaultRange[1], userTimezone);
+          sessionStorage.setItem('dateRange', JSON.stringify([startUTC, endUTC]));
         }
       } catch (error) {
         console.error('Error loading date range from session storage:', error);
         // Fallback to default range
         const today = new Date();
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
-        const defaultRange = [sevenDaysAgo, today] as [Date, Date];
+        today.setHours(23, 59, 59, 999); // End of day
+        const twoDaysAgo = new Date(today);
+        twoDaysAgo.setDate(today.getDate() - 2);
+        twoDaysAgo.setHours(0, 0, 0, 0); // Start of day
+        const defaultRange = [twoDaysAgo, today] as [Date, Date];
         setDateRangeState(defaultRange);
-        sessionStorage.setItem('dateRange', JSON.stringify([defaultRange[0].toISOString(), defaultRange[1].toISOString()]));
+        // Convert to UTC using user's timezone (or default) before storing
+        const startUTC = convertUserTimezoneToUTC(defaultRange[0], userTimezone);
+        const endUTC = convertUserTimezoneToUTC(defaultRange[1], userTimezone);
+        sessionStorage.setItem('dateRange', JSON.stringify([startUTC, endUTC]));
       } finally {
         setIsLoading(false);
       }
@@ -94,12 +114,15 @@ export const DateRangeProvider: React.FC<DateRangeProviderProps> = ({ children }
   useEffect(() => {
     if (!isLoading) {
       try {
-        sessionStorage.setItem('dateRange', JSON.stringify([dateRange[0].toISOString(), dateRange[1].toISOString()]));
+        // Convert to UTC using user's timezone before storing (consistent with DatePicker)
+        const startUTC = convertUserTimezoneToUTC(dateRange[0], userTimezone);
+        const endUTC = convertUserTimezoneToUTC(dateRange[1], userTimezone);
+        sessionStorage.setItem('dateRange', JSON.stringify([startUTC, endUTC]));
       } catch (error) {
         console.error('Error saving date range to session storage:', error);
       }
     }
-  }, [dateRange, isLoading]);
+  }, [dateRange, isLoading, userTimezone]);
 
   const setDateRange = (newDateRange: [Date, Date]) => {
     setDateRangeState(newDateRange);

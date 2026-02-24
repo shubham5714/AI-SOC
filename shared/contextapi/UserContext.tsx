@@ -5,6 +5,7 @@ import { supabase } from '@/shared/lib/supabase';
 interface UserData {
   username: string;
   role: string;
+  timezone: string;
 }
 
 interface UserContextType {
@@ -46,7 +47,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
           const userRoleData = JSON.parse(userRoleRaw);
           setUserData({
             username: userRoleData.username,
-            role: userRoleData.role
+            role: userRoleData.role,
+            timezone: userRoleData.timezone || 'UTC'
           });
           setIsAuthenticated(true);
         } else {
@@ -55,7 +57,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
           try {
             const { data: userRoleData, error: roleError } = await supabase
               .from('user_roles')
-              .select('username, role')
+              .select('username, role, timezone')
               .eq('user_id', user.id)
               .single();
 
@@ -66,7 +68,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
             } else if (userRoleData) {
               const userData = {
                 username: userRoleData.username,
-                role: userRoleData.role
+                role: userRoleData.role,
+                timezone: userRoleData.timezone || 'UTC'
               };
               setUserData(userData);
               setIsAuthenticated(true);
@@ -98,22 +101,23 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     
     // Listen for storage changes from other tabs
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'userRole') {
-        if (event.newValue) {
-          try {
-            const userRoleData = JSON.parse(event.newValue);
-            setUserData({
-              username: userRoleData.username,
-              role: userRoleData.role
-            });
-          } catch (error) {
-            console.error('Error parsing user data from storage event:', error);
+        if (event.key === 'userRole') {
+          if (event.newValue) {
+            try {
+              const userRoleData = JSON.parse(event.newValue);
+              setUserData({
+                username: userRoleData.username,
+                role: userRoleData.role,
+                timezone: userRoleData.timezone || 'UTC'
+              });
+            } catch (error) {
+              console.error('Error parsing user data from storage event:', error);
+              setUserData(null);
+            }
+          } else {
             setUserData(null);
           }
-        } else {
-          setUserData(null);
         }
-      }
     };
     
     // Set up BroadcastChannel for cross-tab communication
