@@ -164,6 +164,8 @@ const normalizeRelatedAlerts = (data: any): RelatedAlertsData => {
     return normalized;
 };
 
+const DUMMY_POLICY_ALERTS_PER_DAY = 25;
+
 const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const searchParams = useSearchParams();
     const ticketId = searchParams.get('id');
@@ -187,6 +189,18 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         category: '',
         reason: ''
     });
+    const [aiTuningForm, setAiTuningForm] = useState({
+        suppressionCountPerDay: 25,
+        scopeType: 'policy',
+        scopeValue: '',
+        suggestionType: 'Genuine activity',
+        validUntilDate: new Date().toISOString().slice(0, 10),
+        permanent: false,
+        suggestionText: '',
+    });
+    const [aiTuningSaving, setAiTuningSaving] = useState(false);
+    const [aiTuningMessage, setAiTuningMessage] = useState<string | null>(null);
+    const [aiTuningError, setAiTuningError] = useState<string | null>(null);
 
     // Function to export raw_logs to CSV
     const handleExportLogs = () => {
@@ -780,6 +794,81 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         } catch (error) {
             console.error('Error closing ticket:', error);
             alert('Failed to close ticket. Please try again.');
+        }
+    };
+
+    const buildAiTuningSuggestionJson = () => {
+        const {
+            scopeType,
+            scopeValue,
+            suggestionType,
+            validUntilDate,
+            permanent,
+            suggestionText,
+        } = aiTuningForm;
+
+        let validUntil: string | null | 'permanent' = null;
+
+        if (permanent) {
+            validUntil = 'permanent';
+        } else if (validUntilDate) {
+            const date = new Date(validUntilDate);
+            if (!isNaN(date.getTime())) {
+                date.setUTCHours(0, 0, 0, 0);
+                validUntil = date.toISOString();
+            }
+        }
+
+        const normalizedSuggestionType = suggestionType
+            ? suggestionType.replace(/\s+/g, "_")
+            : "";
+
+        return [
+            {
+                scope_type: scopeType,
+                scope_value: scopeValue,
+                suggestion_type: normalizedSuggestionType,
+                valid_until: validUntil,
+                permanent,
+                suggestion_text: suggestionText,
+            },
+        ];
+    };
+
+    const handleAiTuningSubmit = async () => {
+        if (!ticket) return;
+
+        if (!aiTuningForm.scopeValue || !aiTuningForm.suggestionText) {
+            setAiTuningError('Please provide both Scope value and Suggestion.');
+            setAiTuningMessage(null);
+            return;
+        }
+
+        const jsonOutput = buildAiTuningSuggestionJson();
+
+        setAiTuningSaving(true);
+        setAiTuningError(null);
+        setAiTuningMessage(null);
+
+        try {
+            const { error } = await supabase
+                .from('investigation_context')
+                .insert({
+                    suppression_count: aiTuningForm.suppressionCountPerDay,
+                    suggestion: jsonOutput,
+                });
+
+            if (error) {
+                console.error('Error inserting into investigation_context:', error);
+                setAiTuningError('Failed to save suggestion to investigation context.');
+            } else {
+                setAiTuningMessage('Suggestion saved successfully.');
+            }
+        } catch (error) {
+            console.error('Error saving AI tuning suggestion:', error);
+            setAiTuningError('Unexpected error while saving suggestion.');
+        } finally {
+            setAiTuningSaving(false);
         }
     };
 
@@ -1514,6 +1603,219 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                 </div>
                             </Tab.Pane>
                             <Tab.Pane eventKey='graph' className="pt-3 px-4 pb-4" role="tabpanel">
+                                <Row className="gy-3">
+                                    <Col xl={6} lg={7}>
+                                        <Card className="custom-card h-100">
+                                            <Card.Body>
+                                                <div className="mb-3">
+                                                    <h5 className="fw-semibold mb-1">Help AI make better decisions for this policy</h5>
+                                                    <p className="text-muted mb-0 fs-12">
+                                                        Configure suppression count and add known false positive or true positive context.
+                                                    </p>
+                                                </div>
+                                                <Row className="gy-3">
+                                                    <Col md={12}>
+                                                        <div className="mb-3">
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <span className="fw-medium fs-13">This policy today</span>
+                                                                <span className="text-muted fs-11">
+                                                                    {DUMMY_POLICY_ALERTS_PER_DAY} alerts/day
+                                                                </span>
+                                                            </div>
+                                                            <div className="progress progress-xs" role="progressbar" aria-valuemin={0} aria-valuemax={100}>
+                                                                <div
+                                                                    className="progress-bar bg-primary"
+                                                                    style={{ width: `${Math.min(DUMMY_POLICY_ALERTS_PER_DAY, 100)}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mb-3">
+                                                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                                                <span className="fw-medium fs-13">Suppress</span>
+                                                                <span className="fs-13">
+                                                                    <strong>{aiTuningForm.suppressionCountPerDay}</strong> / Day
+                                                                </span>
+                                                            </div>
+                                                            <Form.Range
+                                                                min={0}
+                                                                max={100}
+                                                                value={aiTuningForm.suppressionCountPerDay}
+                                                                onChange={(e) =>
+                                                                    setAiTuningForm((prev) => ({
+                                                                        ...prev,
+                                                                        suppressionCountPerDay: Number(e.target.value) || 0,
+                                                                    }))
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </Col>
+                                                    <Col md={12}>
+                                                        <Row className="gy-3">
+                                                            <Col xs={12}>
+                                                                <Form.Label className="fw-medium fs-13">Scope</Form.Label>
+                                                                <div className="d-flex gap-2">
+                                                                    <Form.Select
+                                                                        value={aiTuningForm.scopeType}
+                                                                        style={{ maxWidth: '150px' }}
+                                                                        onChange={(e) =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                scopeType: e.target.value,
+                                                                            }))
+                                                                        }
+                                                                    >
+                                                                        <option value="policy">Policy</option>
+                                                                        <option value="users">Users</option>
+                                                                        <option value="assets">Assets</option>
+                                                                        <option value="ips">IPs</option>
+                                                                        <option value="domains">Domains</option>
+                                                                        <option value="urls">URLs</option>
+                                                                        <option value="hashes">Hashes</option>
+                                                                    </Form.Select>
+                                                                    <Form.Control
+                                                                        type="text"
+                                                                        placeholder="value"
+                                                                        value={aiTuningForm.scopeValue}
+                                                                        onChange={(e) =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                scopeValue: e.target.value,
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </Col>
+                                                            <Col xs={12}>
+                                                                <Form.Label className="fw-medium fs-13 d-block mb-1">Type</Form.Label>
+                                                                <div className="d-flex flex-wrap gap-3 fs-13">
+                                                                    <Form.Check
+                                                                        type="radio"
+                                                                        id="ai-tuning-type-genuine"
+                                                                        name="ai-tuning-type"
+                                                                        label="Genuine activity"
+                                                                        checked={aiTuningForm.suggestionType === 'Genuine activity'}
+                                                                        onChange={() =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                suggestionType: 'Genuine activity',
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                    <Form.Check
+                                                                        type="radio"
+                                                                        id="ai-tuning-type-security-testing"
+                                                                        name="ai-tuning-type"
+                                                                        label="Security Testing"
+                                                                        checked={aiTuningForm.suggestionType === 'Security Testing'}
+                                                                        onChange={() =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                suggestionType: 'Security Testing',
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                    <Form.Check
+                                                                        type="radio"
+                                                                        id="ai-tuning-type-noise"
+                                                                        name="ai-tuning-type"
+                                                                        label="Noise"
+                                                                        checked={aiTuningForm.suggestionType === 'Noise'}
+                                                                        onChange={() =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                suggestionType: 'Noise',
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </Col>
+                                                            <Col xs={12}>
+                                                                <Form.Label className="fw-medium fs-13 d-block mb-1">Valid Until</Form.Label>
+                                                                <div className="d-flex align-items-center gap-3">
+                                                                    <Form.Control
+                                                                        type="date"
+                                                                        value={aiTuningForm.validUntilDate}
+                                                                        onChange={(e) =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                validUntilDate: e.target.value,
+                                                                            }))
+                                                                        }
+                                                                        disabled={aiTuningForm.permanent}
+                                                                        style={{ maxWidth: '180px' }}
+                                                                    />
+                                                                    <Form.Check
+                                                                        type="checkbox"
+                                                                        id="ai-tuning-permanent"
+                                                                        label="Permanent"
+                                                                        checked={aiTuningForm.permanent}
+                                                                        onChange={(e) =>
+                                                                            setAiTuningForm((prev) => ({
+                                                                                ...prev,
+                                                                                permanent: e.target.checked,
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </Col>
+                                                        </Row>
+                                                    </Col>
+                                                </Row>
+                                                <Row className="mt-4 gy-3">
+                                                    <Col xs={12}>
+                                                        <Form.Label className="fw-medium fs-13">Suggestion</Form.Label>
+                                                        <Form.Control
+                                                            as="textarea"
+                                                            rows={3}
+                                                            placeholder="Suppress alerts triggered by internal vulnerability scanner IP range."
+                                                            value={aiTuningForm.suggestionText}
+                                                            onChange={(e) =>
+                                                                setAiTuningForm((prev) => ({
+                                                                    ...prev,
+                                                                    suggestionText: e.target.value,
+                                                                }))
+                                                            }
+                                                        />
+                                                    </Col>
+                                                    <Col xs={12} className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                        <div className="flex-grow-1 me-3">
+                                                            <Form.Label className="fw-medium fs-12 mb-1">JSON preview</Form.Label>
+                                                            <pre
+                                                                className="bg-light border rounded p-2 mb-0 small"
+                                                                style={{ maxHeight: '160px', overflow: 'auto' }}
+                                                            >
+                                                                {JSON.stringify(buildAiTuningSuggestionJson(), null, 2)}
+                                                            </pre>
+                                                        </div>
+                                                        <div className="d-flex flex-column align-items-end gap-2">
+                                                            {aiTuningError && (
+                                                                <span className="text-danger fs-12 text-end">{aiTuningError}</span>
+                                                            )}
+                                                            {aiTuningMessage && !aiTuningError && (
+                                                                <span className="text-success fs-12 text-end">{aiTuningMessage}</span>
+                                                            )}
+                                                            <SpkButton
+                                                                Buttonvariant="primary"
+                                                                Buttontype="button"
+                                                                Customclass="btn btn-primary"
+                                                                onClickfunc={handleAiTuningSubmit}
+                                                                Disabled={aiTuningSaving}
+                                                            >
+                                                                {aiTuningSaving ? 'Saving...' : 'Add Suggestion \u2192'}
+                                                            </SpkButton>
+                                                        </div>
+                                                    </Col>
+                                                </Row>
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
+                                    <Col xl={6} lg={5}>
+                                        <div className="h-100 d-flex align-items-center justify-content-center text-muted fs-12 border-start ps-3">
+                                            {/* Placeholder for future AI tuning insights, history, or charts */}
+                                            Additional AI tuning insights or history can be shown here.
+                                        </div>
+                                    </Col>
+                                </Row>
                             </Tab.Pane>
                             <Tab.Pane eventKey='notes' className="pt-3 px-4 pb-4" role="tabpanel">
                             </Tab.Pane>
