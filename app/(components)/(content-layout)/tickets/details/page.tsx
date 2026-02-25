@@ -1022,12 +1022,12 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
                                     <Nav.Link as='button' eventKey='graph' className="px-4 py-2" role="tab" aria-selected="false">
-                                        Alert Graph
+                                        AI Tuning
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='insights' className="px-4 py-2" role="tab" aria-selected="false">
-                                        Insights
+                                    <Nav.Link as='button' eventKey='notes' className="px-4 py-2" role="tab" aria-selected="false">
+                                        Notes
                                     </Nav.Link>
                                 </Nav.Item>
                             </Nav>
@@ -1515,7 +1515,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                             </Tab.Pane>
                             <Tab.Pane eventKey='graph' className="pt-3 px-4 pb-4" role="tabpanel">
                             </Tab.Pane>
-                            <Tab.Pane eventKey='insights' className="pt-3 px-4 pb-4" role="tabpanel">
+                            <Tab.Pane eventKey='notes' className="pt-3 px-4 pb-4" role="tabpanel">
                             </Tab.Pane>
                         </Tab.Content>
                     </Card.Body>

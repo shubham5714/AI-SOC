@@ -81,6 +81,17 @@ const filterMenuByTenantData = (
         
         return item;
       }
+
+      // Parent not in tenant data but has children (e.g. Context Memory): show if any child is allowed
+      if (item.children && item.children.length > 0) {
+        const filteredChildren = filterMenuByTenantData(item.children, userRole, tenantNavData);
+        if (filteredChildren.length > 0) {
+          return {
+            ...item,
+            children: filteredChildren
+          };
+        }
+      }
       
       // If menu item not found in tenant data, hide it
       return null;
