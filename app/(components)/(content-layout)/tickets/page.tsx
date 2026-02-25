@@ -25,6 +25,7 @@ interface SupabaseTicket {
     priority: 'Low' | 'Medium' | 'High';
     severity?: 'Critical' | 'High' | 'Medium' | 'Low';
     tenant_id: string;
+    source_id?: string | null;
     status_color?: string;
     priority_color?: string;
     closure_category?: string;
@@ -373,7 +374,7 @@ const TicketsList: React.FC<TicketsListProps> = () => {
             }
 
             if (data && data.length > 0) {
-                // Collect all unique column names from all tickets
+                // Collect all unique column names from all tickets (actual DB columns only)
                 const allColumns = new Set<string>();
                 data.forEach(ticket => {
                     Object.keys(ticket).forEach(key => {
@@ -1261,6 +1262,9 @@ const TicketsList: React.FC<TicketsListProps> = () => {
                                                                     <span>{ticket.ai_status || '-'}</span>
                                                                 )}
                                                             </SpkButton>
+                                                        )}
+                                                        {col.key === 'source_id' && (
+                                                            <span>{ticket.source_id ?? '-'}</span>
                                                         )}
                                                         {col.key === 'closure_category' && (
                                                             <span className="fw-medium">{ticket.closure_category || '-'}</span>
