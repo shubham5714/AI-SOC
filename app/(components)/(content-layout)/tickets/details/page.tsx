@@ -81,6 +81,7 @@ interface AlertFields {
 
 interface TicketData {
     id: number;
+    name?: string;
     title: string;
     status: string;
     priority: string;
@@ -201,6 +202,8 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
     const [aiTuningSaving, setAiTuningSaving] = useState(false);
     const [aiTuningMessage, setAiTuningMessage] = useState<string | null>(null);
     const [aiTuningError, setAiTuningError] = useState<string | null>(null);
+    const [existingSuggestions, setExistingSuggestions] = useState<Record<string, Record<string, { suggestion_type: string; valid_until: string | 'permanent'; permanent: boolean; suggestion_text: string }>> | null>(null);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // Function to export raw_logs to CSV
     const handleExportLogs = () => {
@@ -666,6 +669,101 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         }
     }, [assignedTenants, fetchAssignedToUsers]);
 
+    // Fetch existing AI tuning suggestions (latest investigation_context) for the right panel
+    useEffect(() => {
+        if (!ticket) return;
+        const SCOPE_KEYS_LIST = ['ips', 'urls', 'users', 'assets', 'hashes', 'policy', 'domains'];
+        type SuggestionMap = Record<string, Record<string, { suggestion_type: string; valid_until: string | 'permanent'; permanent: boolean; suggestion_text: string }>>;
+        const empty = (): SuggestionMap => ({ ips: {}, urls: {}, users: {}, assets: {}, hashes: {}, policy: {}, domains: {} });
+        const isEntry = (v: unknown): v is { suggestion_type?: string; valid_until?: string; permanent?: boolean; suggestion_text?: string } =>
+            v !== null && typeof v === 'object' && !Array.isArray(v);
+        const normalizeSuggestion = (raw: unknown): SuggestionMap => {
+            const out: SuggestionMap = empty();
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+            const obj = raw as Record<string, unknown>;
+            for (const key of SCOPE_KEYS_LIST) {
+                const val = obj[key];
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    const entries: Record<string, { suggestion_type: string; valid_until: string | 'permanent'; permanent: boolean; suggestion_text: string }> = {};
+                    for (const [scopeVal, entry] of Object.entries(val as Record<string, unknown>)) {
+                        if (isEntry(entry)) {
+                            entries[scopeVal] = {
+                                suggestion_type: typeof entry.suggestion_type === 'string' ? entry.suggestion_type : '',
+                                valid_until: entry.valid_until === 'permanent' ? 'permanent' : (typeof entry.valid_until === 'string' ? entry.valid_until : 'permanent'),
+                                permanent: Boolean(entry.permanent),
+                                suggestion_text: typeof entry.suggestion_text === 'string' ? entry.suggestion_text : '',
+                            };
+                        }
+                    }
+                    out[key] = entries;
+                }
+            }
+            return out;
+        };
+
+        const policyNameForPanel = (ticket.name?.trim() ?? '') || `__ticket_${ticket.id}`;
+        let cancelled = false;
+        setLoadingSuggestions(true);
+        supabase
+            .from('investigation_context')
+            .select('suggestion')
+            .eq('tenant_id', ticket.tenant_id)
+            .eq('policy_name', policyNameForPanel)
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (cancelled) return;
+                setLoadingSuggestions(false);
+                if (error) {
+                    console.error('Error fetching investigation_context for suggestions:', error);
+                    setExistingSuggestions(empty());
+                    return;
+                }
+                setExistingSuggestions(data?.suggestion ? normalizeSuggestion(data.suggestion) : empty());
+            });
+        return () => { cancelled = true; };
+    }, [ticket?.id, ticket?.tenant_id, ticket?.name]);
+
+    useEffect(() => {
+        if (!ticket || aiTuningForm.scopeType !== 'policy') return;
+        const name = ticket.name?.trim() ?? '';
+        setAiTuningForm((prev) => (prev.scopeValue === name ? prev : { ...prev, scopeValue: name }));
+    }, [ticket?.id, ticket?.name, aiTuningForm.scopeType]);
+
+    const rawLogsCount = React.useMemo(() => {
+        const val = ticket?.raw_logs;
+        if (val == null) return 0;
+        if (Array.isArray(val)) return val.length;
+        if (typeof val === 'string') {
+            try { return (JSON.parse(val) as unknown[]).length; } catch { return 0; }
+        }
+        return 0;
+    }, [ticket?.raw_logs]);
+
+    const RELATED_ALERTS_TOP_KEYS = ['ips', 'urls', 'users', 'assets', 'hashes', 'domains'] as const;
+    const relatedAlertsCount = React.useMemo(() => {
+        let total = 0;
+        for (const key of RELATED_ALERTS_TOP_KEYS) {
+            const entities = relatedAlertsData[key];
+            if (entities && typeof entities === 'object' && !Array.isArray(entities)) {
+                total += Object.keys(entities).length;
+            }
+        }
+        return total;
+    }, [relatedAlertsData]);
+
+    const suggestionsCount = React.useMemo(() => {
+        if (!existingSuggestions) return 0;
+        let total = 0;
+        for (const key of ['ips', 'urls', 'users', 'assets', 'hashes', 'policy', 'domains']) {
+            const scopeEntries = existingSuggestions[key];
+            if (scopeEntries && typeof scopeEntries === 'object') {
+                total += Object.keys(scopeEntries).length;
+            }
+        }
+        return total;
+    }, [existingSuggestions]);
 
     // Handle assigned to change
     const handleAssignedToChange = async (selectedOption: any) => {
@@ -797,42 +895,62 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
         }
     };
 
-    const buildAiTuningSuggestionJson = () => {
-        const {
-            scopeType,
-            scopeValue,
-            suggestionType,
-            validUntilDate,
-            permanent,
-            suggestionText,
-        } = aiTuningForm;
+    /** Suggestion column shape: scope keys (ips, urls, users, assets, hashes, policy, domains);
+     * each scope key holds { [scope-value]: { suggestion_type, valid_until, permanent, suggestion_text } }. */
+    const SCOPE_KEYS = ['ips', 'urls', 'users', 'assets', 'hashes', 'policy', 'domains'] as const;
 
-        let validUntil: string | null | 'permanent' = null;
+    const emptySuggestionStructure = (): Record<string, Record<string, { suggestion_type: string; valid_until: string | 'permanent'; permanent: boolean; suggestion_text: string }>> => ({
+        ips: {},
+        urls: {},
+        users: {},
+        assets: {},
+        hashes: {},
+        policy: {},
+        domains: {},
+    });
 
-        if (permanent) {
-            validUntil = 'permanent';
-        } else if (validUntilDate) {
+    type SuggestionEntry = { suggestion_type: string; valid_until: string | 'permanent'; permanent: boolean; suggestion_text: string };
+
+    const buildNewSuggestionEntry = (): SuggestionEntry => {
+        const { suggestionType, validUntilDate, permanent, suggestionText } = aiTuningForm;
+        let validUntil: string | 'permanent' = 'permanent';
+        if (!permanent && validUntilDate) {
             const date = new Date(validUntilDate);
             if (!isNaN(date.getTime())) {
                 date.setUTCHours(0, 0, 0, 0);
                 validUntil = date.toISOString();
             }
         }
-
         const normalizedSuggestionType = suggestionType
-            ? suggestionType.replace(/\s+/g, "_")
-            : "";
+            ? suggestionType.replace(/\s+/g, '_').toLowerCase()
+            : '';
+        return {
+            suggestion_type: normalizedSuggestionType,
+            valid_until: validUntil,
+            permanent,
+            suggestion_text: suggestionText,
+        };
+    };
 
-        return [
-            {
-                scope_type: scopeType,
-                scope_value: scopeValue,
-                suggestion_type: normalizedSuggestionType,
-                valid_until: validUntil,
-                permanent,
-                suggestion_text: suggestionText,
-            },
-        ];
+    /** Merges existing suggestion object with new entry: preserves all other keys; same scope-value under same key is updated. */
+    const mergeSuggestionIntoExisting = (
+        existing: unknown,
+        scopeKey: string,
+        scopeValue: string,
+        newEntry: SuggestionEntry
+    ): Record<string, Record<string, SuggestionEntry>> => {
+        const merged = emptySuggestionStructure();
+        const isScopeObject = (v: unknown): v is Record<string, SuggestionEntry> =>
+            v !== null && typeof v === 'object' && !Array.isArray(v);
+        if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+            for (const key of SCOPE_KEYS) {
+                const val = (existing as Record<string, unknown>)[key];
+                if (isScopeObject(val)) merged[key] = { ...val };
+            }
+        }
+        if (!merged[scopeKey]) merged[scopeKey] = {};
+        merged[scopeKey][scopeValue] = newEntry;
+        return merged;
     };
 
     const handleAiTuningSubmit = async () => {
@@ -844,25 +962,75 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
             return;
         }
 
-        const jsonOutput = buildAiTuningSuggestionJson();
+        const scopeKey = SCOPE_KEYS.includes(aiTuningForm.scopeType as (typeof SCOPE_KEYS)[number]) ? aiTuningForm.scopeType : 'policy';
+        const newEntry = buildNewSuggestionEntry();
 
         setAiTuningSaving(true);
         setAiTuningError(null);
         setAiTuningMessage(null);
 
-        try {
-            const { error } = await supabase
-                .from('investigation_context')
-                .insert({
-                    suppression_count: aiTuningForm.suppressionCountPerDay,
-                    suggestion: jsonOutput,
-                });
+        const loggedInUsername = userData?.username ?? '';
+        const policyNameForRow = (ticket.name?.trim() ?? '') || `__ticket_${ticket.id}`;
 
-            if (error) {
-                console.error('Error inserting into investigation_context:', error);
-                setAiTuningError('Failed to save suggestion to investigation context.');
+        try {
+            const { data: existingRow, error: fetchError } = await supabase
+                .from('investigation_context')
+                .select('id, suggestion')
+                .eq('tenant_id', ticket.tenant_id)
+                .eq('policy_name', policyNameForRow)
+                .order('id', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (fetchError) {
+                console.error('Error fetching investigation_context:', fetchError);
+                setAiTuningError('Failed to load existing suggestions.');
+                return;
+            }
+
+            const mergedSuggestion = mergeSuggestionIntoExisting(
+                existingRow?.suggestion ?? null,
+                scopeKey,
+                aiTuningForm.scopeValue,
+                newEntry
+            );
+
+            if (existingRow?.id != null) {
+                const { error: updateError } = await supabase
+                    .from('investigation_context')
+                    .update({
+                        suppression_count: aiTuningForm.suppressionCountPerDay,
+                        suggestion: mergedSuggestion,
+                        updated_by: loggedInUsername,
+                    })
+                    .eq('id', existingRow.id);
+
+                if (updateError) {
+                    console.error('Error updating investigation_context:', updateError);
+                    setAiTuningError('Failed to save suggestion to investigation context.');
+                } else {
+                    setAiTuningMessage('Suggestion saved successfully.');
+                    setExistingSuggestions(mergedSuggestion);
+                }
             } else {
-                setAiTuningMessage('Suggestion saved successfully.');
+                const { error: insertError } = await supabase
+                    .from('investigation_context')
+                    .insert({
+                        tenant_id: ticket.tenant_id,
+                        policy_name: policyNameForRow,
+                        suppression_count: aiTuningForm.suppressionCountPerDay,
+                        suggestion: mergedSuggestion,
+                        created_by: loggedInUsername,
+                        updated_by: loggedInUsername,
+                    });
+
+                if (insertError) {
+                    console.error('Error inserting into investigation_context:', insertError);
+                    setAiTuningError('Failed to save suggestion to investigation context.');
+                } else {
+                    setAiTuningMessage('Suggestion saved successfully.');
+                    setExistingSuggestions(mergedSuggestion);
+                }
             }
         } catch (error) {
             console.error('Error saving AI tuning suggestion:', error);
@@ -1100,18 +1268,29 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='assets' className="px-4 py-2" role="tab" aria-selected="false">
+                                    <Nav.Link as='button' eventKey='assets' className="px-4 py-2 d-flex align-items-center gap-2" role="tab" aria-selected="false">
                                         Related Alerts
+                                        <span className="badge rounded-pill bg-primary ms-1" style={{ fontSize: '0.7rem', minWidth: '1.25rem' }}>
+                                            {relatedAlertsCount > 99 ? '99+' : relatedAlertsCount}
+                                        </span>
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='logs' className="px-4 py-2" role="tab" aria-selected="false">
+                                    <Nav.Link as='button' eventKey='logs' className="px-4 py-2 d-flex align-items-center gap-2" role="tab" aria-selected="false">
                                         Raw Logs
+                                        {rawLogsCount > 0 && (
+                                            <span className="badge rounded-pill bg-primary ms-1" style={{ fontSize: '0.7rem', minWidth: '1.25rem' }}>
+                                                {rawLogsCount > 99 ? '99+' : rawLogsCount}
+                                            </span>
+                                        )}
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
-                                    <Nav.Link as='button' eventKey='graph' className="px-4 py-2" role="tab" aria-selected="false">
+                                    <Nav.Link as='button' eventKey='graph' className="px-4 py-2 d-flex align-items-center gap-2" role="tab" aria-selected="false">
                                         AI Tuning
+                                        <span className="badge rounded-pill bg-primary ms-1" style={{ fontSize: '0.7rem', minWidth: '1.25rem' }}>
+                                            {suggestionsCount > 99 ? '99+' : suggestionsCount}
+                                        </span>
                                     </Nav.Link>
                                 </Nav.Item>
                                 <Nav.Item as='li' role="presentation">
@@ -1610,7 +1789,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                 <div className="mb-3">
                                                     <h5 className="fw-semibold mb-1">Help AI make better decisions for this policy</h5>
                                                     <p className="text-muted mb-0 fs-12">
-                                                        Configure suppression count and add known false positive or true positive context.
+                                                        Configure suppression count and add known context to reduce alerts volume.
                                                     </p>
                                                 </div>
                                                 <Row className="gy-3">
@@ -1618,13 +1797,13 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                         <div className="mb-3">
                                                             <div className="d-flex justify-content-between align-items-center mb-1">
                                                                 <span className="fw-medium fs-13">This policy today</span>
-                                                                <span className="text-muted fs-11">
+                                                                <span className={DUMMY_POLICY_ALERTS_PER_DAY >= 10 ? 'text-danger fs-11 fw-medium' : 'text-muted fs-11'}>
                                                                     {DUMMY_POLICY_ALERTS_PER_DAY} alerts/day
                                                                 </span>
                                                             </div>
                                                             <div className="progress progress-xs" role="progressbar" aria-valuemin={0} aria-valuemax={100}>
                                                                 <div
-                                                                    className="progress-bar bg-primary"
+                                                                    className={`progress-bar ${DUMMY_POLICY_ALERTS_PER_DAY >= 10 ? 'bg-danger' : 'bg-primary'}`}
                                                                     style={{ width: `${Math.min(DUMMY_POLICY_ALERTS_PER_DAY, 100)}%` }}
                                                                 ></div>
                                                             </div>
@@ -1657,12 +1836,14 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                                     <Form.Select
                                                                         value={aiTuningForm.scopeType}
                                                                         style={{ maxWidth: '150px' }}
-                                                                        onChange={(e) =>
+                                                                        onChange={(e) => {
+                                                                            const scopeType = e.target.value;
                                                                             setAiTuningForm((prev) => ({
                                                                                 ...prev,
-                                                                                scopeType: e.target.value,
-                                                                            }))
-                                                                        }
+                                                                                scopeType,
+                                                                                scopeValue: scopeType === 'policy' ? (ticket?.name?.trim() ?? '') : '',
+                                                                            }));
+                                                                        }}
                                                                     >
                                                                         <option value="policy">Policy</option>
                                                                         <option value="users">Users</option>
@@ -1777,42 +1958,91 @@ const TicketDetails: React.FC<TicketDetailsProps> = () => {
                                                             }
                                                         />
                                                     </Col>
-                                                    <Col xs={12} className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                        <div className="flex-grow-1 me-3">
-                                                            <Form.Label className="fw-medium fs-12 mb-1">JSON preview</Form.Label>
-                                                            <pre
-                                                                className="bg-light border rounded p-2 mb-0 small"
-                                                                style={{ maxHeight: '160px', overflow: 'auto' }}
-                                                            >
-                                                                {JSON.stringify(buildAiTuningSuggestionJson(), null, 2)}
-                                                            </pre>
-                                                        </div>
-                                                        <div className="d-flex flex-column align-items-end gap-2">
-                                                            {aiTuningError && (
-                                                                <span className="text-danger fs-12 text-end">{aiTuningError}</span>
-                                                            )}
-                                                            {aiTuningMessage && !aiTuningError && (
-                                                                <span className="text-success fs-12 text-end">{aiTuningMessage}</span>
-                                                            )}
-                                                            <SpkButton
-                                                                Buttonvariant="primary"
-                                                                Buttontype="button"
-                                                                Customclass="btn btn-primary"
-                                                                onClickfunc={handleAiTuningSubmit}
-                                                                Disabled={aiTuningSaving}
-                                                            >
-                                                                {aiTuningSaving ? 'Saving...' : 'Add Suggestion \u2192'}
-                                                            </SpkButton>
-                                                        </div>
+                                                    <Col xs={12} className="d-flex flex-column align-items-end gap-2">
+                                                        {aiTuningError && (
+                                                            <span className="text-danger fs-12 text-end">{aiTuningError}</span>
+                                                        )}
+                                                        {aiTuningMessage && !aiTuningError && (
+                                                            <span className="text-success fs-12 text-end">{aiTuningMessage}</span>
+                                                        )}
+                                                        <SpkButton
+                                                            Buttonvariant="primary"
+                                                            Buttontype="button"
+                                                            Customclass="btn btn-primary"
+                                                            onClickfunc={handleAiTuningSubmit}
+                                                            Disabled={aiTuningSaving}
+                                                        >
+                                                            {aiTuningSaving ? 'Saving...' : 'Add Suggestion \u2192'}
+                                                        </SpkButton>
                                                     </Col>
                                                 </Row>
                                             </Card.Body>
                                         </Card>
                                     </Col>
                                     <Col xl={6} lg={5}>
-                                        <div className="h-100 d-flex align-items-center justify-content-center text-muted fs-12 border-start ps-3">
-                                            {/* Placeholder for future AI tuning insights, history, or charts */}
-                                            Additional AI tuning insights or history can be shown here.
+                                        <div className="h-100 d-flex flex-column gap-3 border-start ps-3 overflow-auto" style={{ maxHeight: '70vh' }}>
+                                            <p className="fw-semibold related-alerts-text mb-0" style={{ fontSize: '1rem' }}>Existing suggestions</p>
+                                            {loadingSuggestions ? (
+                                                <div className="d-flex align-items-center justify-content-center py-4">
+                                                    <Spinner animation="border" variant="primary" size="sm" />
+                                                </div>
+                                            ) : existingSuggestions && Object.keys(existingSuggestions).some((k) => Object.keys(existingSuggestions[k] || {}).length > 0) ? (
+                                                <div className="d-flex flex-column gap-3">
+                                                    {Object.entries(existingSuggestions).map(([scopeKey, scopeEntries]) => {
+                                                        const entries = scopeEntries && typeof scopeEntries === 'object' ? Object.entries(scopeEntries) : [];
+                                                        if (entries.length === 0) return null;
+                                                        const scopeLabel = scopeKey === 'ips' ? 'IPs' : scopeKey.charAt(0).toUpperCase() + scopeKey.slice(1);
+                                                        return (
+                                                            <div key={scopeKey} className="d-flex flex-column gap-2">
+                                                                <div className="d-flex align-items-center mb-1">
+                                                                    <span className="fw-semibold related-alerts-text" style={{ fontSize: '1.125rem' }}>{scopeLabel}</span>
+                                                                    <SpkBadge variant="danger" Pill={true} Customclass="ms-2">
+                                                                        {entries.length}
+                                                                    </SpkBadge>
+                                                                </div>
+                                                                {entries.map(([scopeValue, entry]) => (
+                                                                    <div key={scopeValue} className="d-flex flex-column gap-2">
+                                                                        <div className="d-flex align-items-center mb-1">
+                                                                            <span className="fw-medium related-alerts-text-secondary fs-13">
+                                                                                <i className="ri-tune-line me-2"></i>
+                                                                                {scopeValue}
+                                                                            </span>
+                                                                        </div>
+                                                                        <Card className="custom-card mb-0" style={{
+                                                                            borderLeft: '4px solid #0d6efd',
+                                                                            borderTop: '1px solid #9ca3af',
+                                                                            borderRight: '1px solid #9ca3af',
+                                                                            borderBottom: '1px solid #9ca3af'
+                                                                        }}>
+                                                                            <Card.Body className="p-3">
+                                                                                <div className="d-flex flex-column gap-2">
+                                                                                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                                                                                        <SpkButton Buttontype="button" Buttonvariant="outline-primary" Customclass="rounded-pill btn-sm">
+                                                                                            {(entry.suggestion_type || '').replace(/_/g, ' ')}
+                                                                                        </SpkButton>
+                                                                                        {entry.permanent && (
+                                                                                            <SpkButton Buttontype="button" Buttonvariant="outline-light" Customclass="rounded-pill btn-sm">Permanent</SpkButton>
+                                                                                        )}
+                                                                                        {!entry.permanent && entry.valid_until && entry.valid_until !== 'permanent' && (
+                                                                                            <span className="text-muted fs-12">Valid until: {new Date(entry.valid_until).toLocaleDateString()}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <p className="mb-0 related-alerts-text-secondary fs-13" style={{ lineHeight: '1.4' }}>{entry.suggestion_text || '—'}</p>
+                                                                                </div>
+                                                                            </Card.Body>
+                                                                        </Card>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-4">
+                                                    <i className="ri-inbox-line fs-48 text-muted mb-2 d-block"></i>
+                                                    <p className="text-muted mb-0 fs-12">No existing suggestions</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </Col>
                                 </Row>
